@@ -1,0 +1,9 @@
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+*.mobileprovision
+*.p12
+*.cer
+*.key
