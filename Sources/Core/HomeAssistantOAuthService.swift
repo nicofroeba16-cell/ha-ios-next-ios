@@ -6,6 +6,7 @@ struct HomeAssistantOAuthConfiguration: Equatable, Sendable {
     let clientID: URL
 
     static let redirectURL = URL(string: "iosnext://auth")!
+    static let productionClientID = URL(string: "https://nicofroeba16-cell.github.io/ha-ios-next-ios/")!
 
     var authorizationURL: URL? {
         var components = URLComponents(url: instanceURL.appending(path: "auth/authorize"), resolvingAgainstBaseURL: false)
