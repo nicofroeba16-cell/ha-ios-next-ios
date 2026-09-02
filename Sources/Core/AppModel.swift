@@ -62,7 +62,6 @@ final class AppModel {
             let address = UserDefaults.standard.string(forKey: serverURLKey),
             let url = URL(string: address),
             let token = try? KeychainStore.value(account: tokenAccount),
-            let token,
             !token.isEmpty
         else { return }
         await connect(serverURL: url, accessToken: token, persist: false)
@@ -125,7 +124,6 @@ final class AppModel {
             let address = UserDefaults.standard.string(forKey: serverURLKey),
             let url = URL(string: address),
             let token = try? KeychainStore.value(account: tokenAccount),
-            let token,
             !token.isEmpty
         else {
             connectionState = .notConfigured
