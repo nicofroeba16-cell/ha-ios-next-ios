@@ -15,11 +15,11 @@
 - [ ] Install Xcode 16+ and build the generated Xcode project without warnings/errors.
 - [ ] Configure a unique production bundle identifier and Apple Developer signing team.
 - [x] Implement native OAuth authorization-code and refresh-token lifecycle.
-- [ ] Publish `OAuthClientID/index.html` over HTTPS and use its final URL as the production client ID.
+- [x] Publish the HTTPS OAuth client-ID page at `https://nicofroeba16-cell.github.io/ha-ios-next-ios/` and wire it into the production app.
 - [ ] Validate login, token refresh and logout against the published client ID.
 - [ ] Test login, reconnect, service actions, rotation, Dark Mode, Dynamic Type, VoiceOver and network changes on iPhone and iPad.
 - [ ] Create App Store privacy labels, support URL and privacy-policy URL.
 - [ ] Upload archive to TestFlight, complete beta review and test on real devices.
 
 ## Release blocker
-Do not ship publicly while the developer-token onboarding remains enabled. A public build requires the verified OAuth redirect and production authentication flow.
+The developer-token path is compiled only into Debug builds. A public build still requires successful OAuth login, refresh and logout validation against a real Home Assistant instance.
