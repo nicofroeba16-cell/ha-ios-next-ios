@@ -4,8 +4,9 @@ struct ConnectionSetupView: View {
     @Environment(\.dismiss) private var dismiss
     let appModel: AppModel
     @State private var serverAddress = ""
+#if DEBUG
     @State private var accessToken = ""
-    @State private var oauthClientID = ""
+#endif
 
     var body: some View {
         NavigationStack {
@@ -15,23 +16,21 @@ struct ConnectionSetupView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
-                    TextField("HTTPS-URL der iOS-Next-Client-ID", text: $oauthClientID)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        .autocorrectionDisabled()
                     Button("Mit Home Assistant anmelden") {
                         guard let configuration = oauthConfiguration else { return }
                         Task { await appModel.connectOAuth(using: configuration) }
                     }
                     .disabled(oauthConfiguration == nil || appModel.connectionState == .connecting)
                 }
+#if DEBUG
                 Section("Lokale Entwicklungsverbindung") {
                     SecureField("Entwicklerzugriffstoken", text: $accessToken)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
+#endif
                 Section {
-                    Text("Die Produktionsanmeldung benötigt eine veröffentlichte HTTPS-Client-ID-Seite, die den iOS-Next-Redirect bestätigt. Der Entwickler-Token wird ausschließlich im iOS-Schlüsselbund gespeichert und ist nicht für öffentliche Builds bestimmt.")
+                    Text("Die Anmeldung nutzt die veröffentlichte iOS-Next-Client-ID. Zugangsdaten bleiben ausschließlich im iOS-Schlüsselbund.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -44,6 +43,7 @@ struct ConnectionSetupView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Abbrechen") { dismiss() }
                 }
+#if DEBUG
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Verbinden") {
                         guard let url = URL(string: serverAddress), !accessToken.isEmpty else { return }
@@ -51,6 +51,7 @@ struct ConnectionSetupView: View {
                     }
                     .disabled(URL(string: serverAddress) == nil || accessToken.isEmpty || appModel.connectionState == .connecting)
                 }
+#endif
             }
         }
     }
@@ -58,9 +59,11 @@ struct ConnectionSetupView: View {
     private var oauthConfiguration: HomeAssistantOAuthConfiguration? {
         guard
             let instanceURL = URL(string: serverAddress),
-            let clientID = URL(string: oauthClientID),
-            clientID.scheme == "https"
+            instanceURL.scheme == "https"
         else { return nil }
-        return HomeAssistantOAuthConfiguration(instanceURL: instanceURL, clientID: clientID)
+        return HomeAssistantOAuthConfiguration(
+            instanceURL: instanceURL,
+            clientID: HomeAssistantOAuthConfiguration.productionClientID
+        )
     }
 }
