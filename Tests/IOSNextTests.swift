@@ -31,4 +31,11 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(url.path, "/auth/authorize")
         XCTAssertEqual(items?.first(where: { $0.name == "redirect_uri" })?.value, "iosnext://auth")
     }
+
+    func testProductionOAuthClientIDUsesPublishedPage() {
+        XCTAssertEqual(
+            HomeAssistantOAuthConfiguration.productionClientID.absoluteString,
+            "https://nicofroeba16-cell.github.io/ha-ios-next-ios/"
+        )
+    }
 }
