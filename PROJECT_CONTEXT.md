@@ -21,16 +21,15 @@ Native iOS/iPadOS 17+ SwiftUI Home Assistant client. Independent from Lovelace a
 - `HomeAssistantClient.callService(domain:service:target:serviceData:)` performs actions.
 - `AppModel` owns connection/session state and profile selection.
 - `ProfileCatalog` is the only profile-to-entity mapping source; it contains verified Timo/Mika IDs and no invented Juli/Gabi devices.
-- `HomeAssistantOAuthService` implements authorization-code exchange; it becomes active only after `OAuthClientID/index.html` is deployed over HTTPS as the configured client ID.
+- `HomeAssistantOAuthService` implements authorization-code exchange and uses the published production client ID `https://nicofroeba16-cell.github.io/ha-ios-next-ios/`.
 - `AppTab` is the top-level navigation contract.
 
 ## Safety
 - Tokens are stored only in `KeychainStore`.
 - No dashboard mutation, secret files, or runtime HA configuration is included.
-- The token setup is an explicit development-only connection; public distribution is blocked until OAuth uses a verified HTTPS client-ID and approved native redirect URI.
+- The developer-token setup is compiled only in Debug. Release builds use OAuth and store credentials only in `KeychainStore`.
 
 ## Next work
 1. Validate connection to a real HA instance on iPhone and iPad.
-2. Publish the OAuth client-ID redirect page and wire the authorization-code/refresh-token lifecycle into onboarding.
-3. Map each profile's verified HA entities and replace fixture content with semantic live widgets.
-4. Add media commands, accessibility UI tests, TestFlight delivery and App Store metadata.
+2. Map each profile's verified HA entities and replace fixture content with semantic live widgets.
+3. Add media commands, accessibility UI tests, TestFlight delivery and App Store metadata.
