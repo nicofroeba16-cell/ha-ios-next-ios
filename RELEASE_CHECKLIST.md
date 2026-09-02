@@ -10,12 +10,14 @@
 - [x] App icon source asset
 - [x] Privacy and release documentation
 - [x] macOS CI workflow for build and unit tests after repository publication
+- [x] GitHub macOS CI build and unit tests pass on the release branch.
 
 ## Mandatory external gates
 - [ ] Install Xcode 16+ and build the generated Xcode project without warnings/errors.
 - [ ] Configure a unique production bundle identifier and Apple Developer signing team.
 - [x] Implement native OAuth authorization-code and refresh-token lifecycle.
 - [x] Publish the HTTPS OAuth client-ID page at `https://nicofroeba16-cell.github.io/ha-ios-next-ios/` and wire it into the production app.
+- [x] Verify the published OAuth page exposes `iosnext://auth` as its redirect URI.
 - [ ] Validate login, token refresh and logout against the published client ID.
 - [ ] Test login, reconnect, service actions, rotation, Dark Mode, Dynamic Type, VoiceOver and network changes on iPhone and iPad.
 - [ ] Create App Store privacy labels, support URL and privacy-policy URL.
