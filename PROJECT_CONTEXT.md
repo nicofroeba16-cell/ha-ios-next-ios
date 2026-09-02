@@ -8,6 +8,7 @@ Native iOS/iPadOS 17+ SwiftUI Home Assistant client. Independent from Lovelace a
 - App target: `IOSNext`; tests: `IOSNextTests`.
 - No external dependencies.
 - `.github/workflows/ios.yml` generates the Xcode project and runs iOS unit tests on macOS after repository publication.
+- GitHub Pages hosts the production OAuth client-ID page; the latest macOS CI build and unit-test run passed.
 
 ## Architecture
 - `App/`: application entry, tab shell, onboarding/connection UI.
