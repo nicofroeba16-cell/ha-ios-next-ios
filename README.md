@@ -12,10 +12,10 @@ After pushing the project to GitHub, the included macOS workflow regenerates the
 
 ## Current milestone
 
-The release candidate foundation provides the native app shell, profile-specific start context, a Home Assistant WebSocket client, Keychain-backed credentials, five feature tabs, app-icon source, OAuth authorization-code/refresh-token implementation and release documentation. The public-release blocker is publishing the included OAuth client-ID page over HTTPS and validating it with a real HA instance.
+The release candidate foundation provides the native app shell, profile-specific start context, a Home Assistant WebSocket client, Keychain-backed credentials, five feature tabs, app-icon source, OAuth authorization-code/refresh-token implementation and release documentation. The production OAuth client ID is published at `https://nicofroeba16-cell.github.io/ha-ios-next-ios/`; final validation must happen with a real HA instance.
 
 ## Safety
 
 - Home Assistant remains the backend; this project never edits HA dashboards.
 - Do not commit credentials or export Keychain content.
-- The connection screen stores a developer access token only in the iOS Keychain. Never submit a public build while this setup path is active; see `RELEASE_CHECKLIST.md`.
+- Release builds use native OAuth only. The Keychain-backed developer-token path is compiled only for Debug; see `RELEASE_CHECKLIST.md`.
