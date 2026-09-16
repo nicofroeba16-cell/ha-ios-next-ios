@@ -16,6 +16,8 @@ concurrency:
 jobs:
   xcode-27:
     runs-on: xcode-27
+    env:
+      CI_RUNTIME_SCOPE: full
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -60,12 +62,16 @@ jobs:
           git -C "$checkout" diff --check
       - name: Build for testing on iOS 27
         run: |
+          source Scripts/ci_runtime.sh
+          runtime_count xcodebuild_invocations
+          runtime_start build_for_testing
           set -o pipefail
           xcodebuild build-for-testing \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
             | tee xcodebuild.log
+          runtime_end build_for_testing
 
       - name: Verify built packet tunnel metadata
         run: |
@@ -96,6 +102,9 @@ jobs:
 
       - name: Run unit tests on iOS 27
         run: |
+          source Scripts/ci_runtime.sh
+          runtime_count xcodebuild_invocations
+          runtime_start unit_tests
           set -o pipefail
           xcodebuild test-without-building \
             -project IOSNext.xcodeproj \
@@ -104,6 +113,7 @@ jobs:
             -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
             | tee -a xcodebuild.log
+          runtime_end unit_tests
       - name: Run real product UI acceptance matrix
         run: bash Scripts/run_ui_acceptance_matrix.sh
       - name: Capture and validate live HA card catalog
@@ -112,6 +122,11 @@ jobs:
       - name: Record and validate live interaction acceptance
         if: success()
         run: bash Scripts/run_animation_acceptance.sh
+      - name: Render runtime telemetry
+        if: always()
+        run: |
+          source Scripts/ci_runtime.sh
+          runtime_render_json ci-runtime-full.json
       - name: Upload Xcode evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -129,3 +144,4 @@ jobs:
             UIAcceptance
             CardScreenshots
             AnimationAcceptance
+            ci-runtime-full.json

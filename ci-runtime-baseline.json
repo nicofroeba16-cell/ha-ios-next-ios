@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-09-16",
+  "source_branch": "codex/ios27-owner-control",
+  "source_commit": "f977078802b3518256543ccada37e343e66024d0",
+  "fast_gate": {
+    "run_id": 35097789422,
+    "run_number": 16,
+    "wall_clock_seconds": 260.6,
+    "portable_job_seconds": 5.7,
+    "build_for_testing_seconds": 63.5,
+    "unit_tests_seconds": 181.1
+  },
+  "full_gate": {
+    "run_id": 35094321720,
+    "run_number": 40,
+    "wall_clock_seconds": 914.2,
+    "steps_seconds": {
+      "checkout": 1.4,
+      "go_setup": 2.5,
+      "environment_device_discovery": 5.1,
+      "portable_security_backend": 39.4,
+      "xcodegen_setup": 1.7,
+      "wireguard_prepare": 2.6,
+      "xcodegen": 0.1,
+      "wireguard_verify": 0.1,
+      "build_for_testing": 52.4,
+      "packet_tunnel_metadata": 0.5,
+      "launch_screen_verify": 0.3,
+      "unit_tests": 167.8,
+      "product_ui_acceptance": 310.3,
+      "ha_card_capture": 245.1,
+      "animation_acceptance": 68.3,
+      "evidence_upload": 15
+    }
+  },
+  "internal_metrics": {
+    "status": "pending_first_instrumented_green_run",
+    "simulator_boot_seconds": null,
+    "app_install_seconds": null,
+    "app_launch_seconds": null,
+    "simulator_boots": null,
+    "app_installs": null,
+    "app_launches": null,
+    "app_terminations": null,
+    "xcodebuild_invocations": null
+  }
+}

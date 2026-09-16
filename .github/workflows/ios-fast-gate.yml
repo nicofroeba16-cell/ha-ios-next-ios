@@ -34,6 +34,8 @@ jobs:
   ios-fast:
     name: Xcode 27 build/test
     runs-on: xcode-27
+    env:
+      CI_RUNTIME_SCOPE: fast
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -71,12 +73,16 @@ jobs:
 
       - name: Build once for testing
         run: |
+          source Scripts/ci_runtime.sh
+          runtime_count xcodebuild_invocations
+          runtime_start build_for_testing
           set -o pipefail
           xcodebuild build-for-testing \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
             | tee xcodebuild-fast.log
+          runtime_end build_for_testing
 
       - name: Verify packet tunnel metadata
         run: |
@@ -88,6 +94,9 @@ jobs:
 
       - name: Run tests without rebuilding
         run: |
+          source Scripts/ci_runtime.sh
+          runtime_count xcodebuild_invocations
+          runtime_start unit_tests
           set -o pipefail
           xcodebuild test-without-building \
             -project IOSNext.xcodeproj \
@@ -96,3 +105,19 @@ jobs:
             -only-testing:IOSNextTests \
             -resultBundlePath FastTestResults.xcresult \
             | tee -a xcodebuild-fast.log
+          runtime_end unit_tests
+
+      - name: Render runtime telemetry
+        if: always()
+        run: |
+          source Scripts/ci_runtime.sh
+          runtime_render_json ci-runtime-fast.json
+
+      - name: Upload runtime telemetry
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-27-fast-runtime
+          if-no-files-found: error
+          retention-days: 14
+          path: ci-runtime-fast.json
