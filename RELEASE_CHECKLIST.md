@@ -13,10 +13,10 @@
 - [x] Privacy manifest and app-switcher protection for chat content
 - [x] macOS CI workflow for build and unit tests after repository publication
 - [x] Verify the official GitHub `xcode-27` runner, iOS 27 SDK and iPhone 17 Pro simulator; update CI.
-- [ ] Run the committed workflow on GitHub and archive its green `.xcresult` evidence.
+- [ ] Archive green exact-HEAD evidence from both the iOS 27 Fast Gate and iOS 27 Mac Gate before release.
 
 ## Mandatory external gates
-- [ ] Pass the hosted Xcode 27 build without warnings/errors.
+- [ ] Pass the exact-HEAD iOS 27 Mac Gate with Xcode 27 without warnings/errors.
 - [ ] Configure a unique production bundle identifier and Apple Developer signing team.
 - [x] Implement native OAuth authorization-code and refresh-token lifecycle.
 - [x] Publish the HTTPS OAuth client-ID page at `https://nicofroeba16-cell.github.io/ha-ios-next-ios/` and wire it into the production app.
