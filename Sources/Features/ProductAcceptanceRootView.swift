@@ -73,17 +73,17 @@ struct ProductAcceptanceRootView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("product-acceptance-\(screen.rawValue)")
         .accessibilityValue(accessibilityStateDescription)
-        .task(id: screen.rawValue) {
-            await markCurrentScreenReady()
+        .background {
+            VisualAcceptanceReadyProbe(
+                markerBaseName: "iosnext-product-screen-ready-\(screen.rawValue)-\(acceptanceAppearanceName)",
+                accessibilityIdentifier: "visual-ready-product-\(screen.rawValue)-\(acceptanceAppearanceName)",
+                payload: "screen=\(screen.rawValue);appearance=\(acceptanceAppearanceName)"
+            )
         }
     }
 
-    private func markCurrentScreenReady() async {
-        await Task.yield()
-        try? await Task.sleep(nanoseconds: 120_000_000)
-        let marker = FileManager.default.temporaryDirectory
-            .appendingPathComponent("iosnext-product-screen-ready-\(screen.rawValue)")
-        try? Data(screen.rawValue.utf8).write(to: marker, options: .atomic)
+    private var acceptanceAppearanceName: String {
+        isDarkMode ? "dark" : "light"
     }
 
     private var accessibilityStateDescription: String {
