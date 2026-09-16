@@ -13,7 +13,12 @@ test -n "$device_id"
 xcrun simctl boot "$device_id" 2>/dev/null || true
 xcrun simctl bootstatus "$device_id" -b
 
-app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
+if [ -n "${XCTESTRUN_PATH:-}" ] && [ -f "$XCTESTRUN_PATH" ]; then
+  products_dir="$(dirname "$XCTESTRUN_PATH")"
+  app_path="$products_dir/Debug-iphonesimulator/IOSNext.app"
+else
+  app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
+fi
 test -d "$app_path"
 
 rm -rf "$OUT_DIR"
