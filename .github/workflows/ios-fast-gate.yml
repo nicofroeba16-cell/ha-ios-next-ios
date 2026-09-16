@@ -54,6 +54,29 @@ jobs:
           xcrun simctl list devices available | grep -F "iPhone 17 Pro"
           go version
 
+      - name: Start iPhone simulator early
+        run: |
+          set -euo pipefail
+          source Scripts/ci_runtime.sh
+          read -r IOSNEXT_IPHONE_UDID IOSNEXT_IPHONE_STATE < <(
+            xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[d for runtime,devices in data["devices"].items() if runtime.endswith("iOS-27-0") for d in devices if d.get("isAvailable", True) and d["name"]=="iPhone 17 Pro"]; assert len(matches)==1, f"expected exactly one iPhone 17 Pro on iOS 27.0, got {len(matches)}"; d=matches[0]; print(d["udid"], d["state"])'
+          )
+          test -n "$IOSNEXT_IPHONE_UDID"
+          echo "IOSNEXT_IPHONE_UDID=$IOSNEXT_IPHONE_UDID" >> "$GITHUB_ENV"
+          runtime_start simulator_boot_overlap
+          case "$IOSNEXT_IPHONE_STATE" in
+            Shutdown)
+              xcrun simctl boot "$IOSNEXT_IPHONE_UDID"
+              runtime_count simulator_boots
+              ;;
+            Booted)
+              ;;
+            *)
+              echo "Unexpected simulator state: $IOSNEXT_IPHONE_STATE" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Ensure XcodeGen
         run: |
           set -euo pipefail
@@ -80,7 +103,7 @@ jobs:
           xcodebuild build-for-testing \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -destination "platform=iOS Simulator,id=$IOSNEXT_IPHONE_UDID" \
             | tee xcodebuild-fast.log
           runtime_end build_for_testing
 
@@ -95,13 +118,45 @@ jobs:
       - name: Run tests without rebuilding
         run: |
           source Scripts/ci_runtime.sh
+          runtime_start simulator_boot_wait
+          xcrun simctl bootstatus "$IOSNEXT_IPHONE_UDID" -b
+          runtime_end simulator_boot_wait
+          runtime_start simulator_instruments_ready
+          python3 - "$IOSNEXT_IPHONE_UDID" <<'PY'
+          import subprocess
+          import sys
+          import time
+
+          udid = sys.argv[1]
+          deadline = time.monotonic() + 90
+          last_output = ""
+          while time.monotonic() < deadline:
+              try:
+                  probe = subprocess.run(
+                      ["xcrun", "xctrace", "list", "devices"],
+                      capture_output=True,
+                      text=True,
+                      timeout=20,
+                  )
+                  last_output = (probe.stdout or "") + (probe.stderr or "")
+                  if probe.returncode == 0 and udid in last_output:
+                      break
+              except subprocess.TimeoutExpired:
+                  last_output = "xctrace list devices timed out"
+              time.sleep(1)
+          else:
+              print(last_output, file=sys.stderr)
+              raise SystemExit("Simulator never became visible to Instruments")
+          PY
+          runtime_end simulator_instruments_ready
+          runtime_end simulator_boot_overlap
           runtime_count xcodebuild_invocations
           runtime_start unit_tests
           set -o pipefail
           xcodebuild test-without-building \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -destination "platform=iOS Simulator,id=$IOSNEXT_IPHONE_UDID" \
             -only-testing:IOSNextTests \
             -resultBundlePath FastTestResults.xcresult \
             | tee -a xcodebuild-fast.log
