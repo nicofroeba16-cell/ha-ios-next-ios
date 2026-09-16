@@ -1,19 +1,65 @@
-name: iOS CI
+name: iOS 27 Mac Gate
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-27-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: macos-15
-    timeout-minutes: 20
+  xcode-27:
+    runs-on: xcode-27
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Prove Xcode 27 environment
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          test "$(xcrun --sdk iphoneos --show-sdk-version)" = "27.0"
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
+          xcrun simctl list devices available | grep -F "iPhone 17 Pro"
+          go version
+      - name: Portable security and backend tests
+        run: bash Scripts/validate_without_macos.sh
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
-        run: xcodegen generate
-      - name: Build and test
-        run: xcodebuild test -project IOSNext.xcodeproj -scheme IOSNext -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' CODE_SIGNING_ALLOWED=NO
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -resolvePackageDependencies -project IOSNext.xcodeproj -scheme IOSNext
+      - name: Verify pinned WireGuard source
+        run: |
+          set -euo pipefail
+          checkout="$(find ~/Library/Developer/Xcode/DerivedData -path '*/SourcePackages/checkouts/wireguard-apple' -type d -print -quit)"
+          test -n "$checkout"
+          test "$(git -C "$checkout" rev-parse HEAD)" = "2fec12a6e1f6e3460b6ee483aa00ad29cddadab1"
+          git -C "$checkout" diff --quiet
+      - name: Build and test on iOS 27
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project IOSNext.xcodeproj \
+            -scheme IOSNext \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee xcodebuild.log
+      - name: Upload Xcode evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-27-xcode-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            xcodebuild.log
+            TestResults.xcresult

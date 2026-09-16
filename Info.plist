@@ -23,6 +23,14 @@
     </array>
     <key>NSLocalNetworkUsageDescription</key>
     <string>iOS Next verbindet sich mit deinem Home-Assistant-Server im lokalen Netzwerk.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>iOS Next verwendet Face ID, um kritische Runner-Aktionen zu bestätigen.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>iOS Next verwendet das Mikrofon nur während einer Sprachnachricht und hält die Aufnahme ausschließlich im Arbeitsspeicher.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>iOS Next verwendet die Kamera für Fotos, die direkt im Arbeitsspeicher verschlüsselt werden.</string>
+    <key>IOSNextWireGuardKeychainAccessGroup</key>
+    <string>$(AppIdentifierPrefix)de.nicofroeba16.iosnext.shared</string>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UISupportedInterfaceOrientations</key>

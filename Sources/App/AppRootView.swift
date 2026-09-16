@@ -2,53 +2,114 @@ import SwiftUI
 
 struct AppRootView: View {
     let appModel: AppModel
+    @State private var chatModel = ChatModel()
+    @State private var isPresentingStandaloneChat = false
 
     var body: some View {
         Group {
-            if appModel.isConnected {
-                AppShellView(appModel: appModel)
-            } else {
-                ConnectionLandingView(appModel: appModel)
+            switch appModel.connectionState {
+            case .connected:
+                AppShellView(appModel: appModel, chatModel: chatModel)
+                    .transition(.opacity)
+            case .connecting where !appModel.entities.isEmpty:
+                AppShellView(appModel: appModel, chatModel: chatModel)
+                    .overlay(alignment: .top) {
+                        reconnectBanner
+                    }
+            default:
+                ConnectionLandingView(appModel: appModel) {
+                    isPresentingStandaloneChat = true
+                }
+                    .transition(.opacity)
             }
         }
+        .animation(.smooth(duration: 0.3), value: appModel.isConnected)
         .task { await appModel.restoreConnection() }
         .sheet(isPresented: Bindable(appModel).isPresentingConnection) {
             ConnectionSetupView(appModel: appModel)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $isPresentingStandaloneChat) {
+            StandaloneChatView(chatModel: chatModel)
+        }
+    }
+
+    private var reconnectBanner: some View {
+        Label("Verbindung wird wiederhergestellt …", systemImage: "arrow.triangle.2.circlepath")
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .padding(.top, 8)
+            .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+private struct ConnectionLandingView: View {
+    let appModel: AppModel
+    let openChat: () -> Void
+
+    var body: some View {
+        ZStack {
+            IOSNextBackground()
+            VStack(spacing: 28) {
+                Spacer()
+                ZStack {
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(.tint.opacity(0.14))
+                    Image(systemName: "house.lodge.fill")
+                        .font(.system(size: 48, weight: .medium))
+                        .foregroundStyle(.tint)
+                }
+                .frame(width: 108, height: 108)
+                .accessibilityHidden(true)
+
+                VStack(spacing: 8) {
+                    Text("iOS Next")
+                        .font(.largeTitle.bold())
+                    Text("Dein Zuhause. Nativ auf iPhone und iPad.")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                if case let .failed(message) = appModel.connectionState {
+                    IOSNextErrorBanner(message: message)
+                        .frame(maxWidth: 520)
+                }
+
+                Spacer()
+                Button("Home Assistant verbinden", systemImage: "link") {
+                    appModel.isPresentingConnection = true
+                }
+                .font(.headline)
+                .controlSize(.large)
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
+                .accessibilityHint("Öffnet die sichere Einrichtung der Home-Assistant-Verbindung.")
+                Button("Verschlüsselten Chat öffnen", systemImage: "message.badge.shield.fill", action: openChat)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
 
-private struct ConnectionLandingView: View {
-    let appModel: AppModel
+private struct StandaloneChatView: View {
+    let chatModel: ChatModel
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "house.and.flag.fill")
-                .font(.system(size: 52, weight: .medium))
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-            VStack(spacing: 8) {
-                Text("iOS Next")
-                    .font(.largeTitle.bold())
-                Text("Deine native Home-Assistant-App")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            }
-            if case let .failed(message) = appModel.connectionState {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-            }
-            Button("Home Assistant verbinden") {
-                appModel.isPresentingConnection = true
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .accessibilityHint("Öffnet die sichere Einrichtung der Home-Assistant-Verbindung.")
+        NavigationStack {
+            ChatView(chatModel: chatModel)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Schließen", systemImage: "xmark") { dismiss() }
+                            .labelStyle(.iconOnly)
+                    }
+                }
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemGroupedBackground))
     }
 }

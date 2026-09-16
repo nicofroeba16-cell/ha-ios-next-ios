@@ -11,3 +11,6 @@ xcuserdata/
 *.p12
 *.cer
 *.key
+__pycache__/
+*.py[cod]
+Backend/admin-state/

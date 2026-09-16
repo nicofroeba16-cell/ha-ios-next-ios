@@ -8,7 +8,11 @@ enum KeychainStore {
         try save(Data(value.utf8), account: account)
     }
 
-    static func save(_ data: Data, account: String) throws {
+    static func save(
+        _ data: Data,
+        account: String,
+        accessibility: CFString = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    ) throws {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -20,7 +24,7 @@ enum KeychainStore {
             kSecAttrService: service,
             kSecAttrAccount: account,
             kSecValueData: data,
-            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccessible: accessibility
         ]
         let status = SecItemAdd(item as CFDictionary, nil)
         guard status == errSecSuccess else { throw KeychainError.unexpectedStatus(status) }
@@ -60,6 +64,12 @@ enum KeychainStore {
 
 enum KeychainError: LocalizedError {
     case unexpectedStatus(OSStatus)
+    case configurationMissing
 
-    var errorDescription: String? { "Der sichere iOS-Schlüsselspeicher konnte nicht verwendet werden." }
+    var errorDescription: String? {
+        switch self {
+        case .unexpectedStatus: "Der sichere iOS-Schlüsselspeicher konnte nicht verwendet werden."
+        case .configurationMissing: "Die signierte WireGuard-Schlüsselbundgruppe ist noch nicht eingerichtet."
+        }
+    }
 }
