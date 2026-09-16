@@ -7,7 +7,9 @@ struct AppRootView: View {
 
     var body: some View {
         Group {
-            if isLiveCardTestMode {
+            if isAnimationAcceptanceMode {
+                AnimationAcceptanceView()
+            } else if isLiveCardTestMode {
                 LiveHACardTestModeView()
             } else {
                 switch appModel.connectionState {
@@ -29,7 +31,7 @@ struct AppRootView: View {
         }
         .animation(.smooth(duration: 0.3), value: appModel.isConnected)
         .task {
-            if !isLiveCardTestMode {
+            if !isLiveCardTestMode && !isAnimationAcceptanceMode {
                 await appModel.restoreConnection()
             }
         }
@@ -45,6 +47,10 @@ struct AppRootView: View {
 
     private var isLiveCardTestMode: Bool {
         ProcessInfo.processInfo.arguments.contains("--live-card-test-mode")
+    }
+
+    private var isAnimationAcceptanceMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("--animation-acceptance-mode")
     }
 
     private var reconnectBanner: some View {
