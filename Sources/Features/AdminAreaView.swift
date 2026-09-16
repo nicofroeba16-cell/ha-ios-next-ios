@@ -217,7 +217,7 @@ struct AdminAreaView: View {
                         HStack(spacing: 14) {
                             Image(systemName: action.symbol)
                                 .frame(width: 28)
-                                .foregroundStyle(action == .enableMaintenance ? .orange : .tint)
+                                .foregroundStyle(action == .enableMaintenance ? Color.orange : Color.accentColor)
                             Text(action.title)
                                 .foregroundStyle(.primary)
                             Spacer()

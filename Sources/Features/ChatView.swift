@@ -408,12 +408,14 @@ private struct ChatConfigurationView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
-                Section("Privater Relay") {
+                Section {
                     TextField("https://chat.home.arpa:8787", text: $endpoint)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     SecureField("Chat-Token", text: $token)
+                } header: {
+                    Text("Privater Relay")
                 } footer: {
                     Text("Der Relay speichert nur öffentliche Geräteschlüssel. Nachrichten und Medien liegen höchstens 120 Sekunden verschlüsselt im RAM und werden bei Abruf gelöscht.")
                 }
@@ -452,7 +454,7 @@ private struct ChatSecurityView: View {
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
                 }
-                Section("Kontaktgeräte") {
+                Section {
                     if chatModel.recipientSafetyNumbers.isEmpty {
                         Text("Noch kein Schlüssel gefunden")
                             .foregroundStyle(.secondary)
@@ -463,6 +465,8 @@ private struct ChatSecurityView: View {
                                 .textSelection(.enabled)
                         }
                     }
+                } header: {
+                    Text("Kontaktgeräte")
                 } footer: {
                     Text("Vergleicht diese Nummern über einen zweiten vertrauenswürdigen Kanal. Ändert sich ein bereits bekannter Schlüssel, blockiert die App den Versand.")
                 }

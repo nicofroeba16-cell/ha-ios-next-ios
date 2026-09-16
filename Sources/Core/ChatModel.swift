@@ -56,10 +56,6 @@ final class ChatModel {
         restoreConfiguration()
     }
 
-    deinit {
-        receiveTask?.cancel()
-    }
-
     func configure(endpoint: String, token: String, userID: String, recipientUserID: String) throws {
         guard let url = URL(string: endpoint), isAllowedEndpoint(url),
               Self.validIdentifier(userID), Self.validIdentifier(recipientUserID), token.count >= 32 else {
@@ -324,8 +320,7 @@ final class ChatModel {
               let userID = UserDefaults.standard.string(forKey: userKey),
               let recipient = UserDefaults.standard.string(forKey: recipientKey),
               let deviceID = UserDefaults.standard.string(forKey: deviceKey),
-              let token = try? KeychainStore.value(account: tokenAccount),
-              let token else { return }
+              let token = try? KeychainStore.value(account: tokenAccount) else { return }
         recipientUserID = recipient
         configuration = ChatConfiguration(baseURL: url, token: token, userID: userID, deviceID: deviceID)
         state = .connecting

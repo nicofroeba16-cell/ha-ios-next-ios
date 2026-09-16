@@ -78,7 +78,7 @@ final class WireGuardTunnelController {
 
     func connect() async {
         do {
-            guard let manager = manager ?? (try await installedManager()) else {
+            guard let manager = try await resolvedManager() else {
                 throw WireGuardTunnelError.configurationNotInstalled
             }
             try manager.connection.startVPNTunnel()
@@ -96,7 +96,7 @@ final class WireGuardTunnelController {
 
     func updateOnDemand() async {
         do {
-            guard let manager = manager ?? (try await installedManager()) else { return }
+            guard let manager = try await resolvedManager() else { return }
             manager.isOnDemandEnabled = isOnDemandEnabled
             if isOnDemandEnabled, manager.onDemandRules?.isEmpty != false {
                 let connectRule = NEOnDemandRuleConnect()
@@ -114,7 +114,7 @@ final class WireGuardTunnelController {
 
     func removeConfiguration() async {
         do {
-            if let manager = manager ?? (try await installedManager()) {
+            if let manager = try await resolvedManager() {
                 manager.connection.stopVPNTunnel()
                 try await remove(manager)
             }
@@ -128,17 +128,22 @@ final class WireGuardTunnelController {
 
     private func installedManager() async throws -> NETunnelProviderManager? {
         let providerBundleIdentifier = self.providerBundleIdentifier
-        try await withCheckedThrowingContinuation { continuation in
+        let managers: [NETunnelProviderManager] = try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<[NETunnelProviderManager], Error>) in
             NETunnelProviderManager.loadAllFromPreferences { managers, error in
                 if let error { continuation.resume(throwing: error) }
-                else {
-                    continuation.resume(returning: managers?.first(where: {
-                        ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier
-                            == providerBundleIdentifier
-                    }))
-                }
+                else { continuation.resume(returning: managers ?? []) }
             }
         }
+        return managers.first(where: {
+            ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier
+                == providerBundleIdentifier
+        })
+    }
+
+    private func resolvedManager() async throws -> NETunnelProviderManager? {
+        if let manager { return manager }
+        return try await installedManager()
     }
 
     private func save(_ manager: NETunnelProviderManager) async throws {

@@ -155,7 +155,7 @@ struct EntityRow: View {
                     .lineLimit(2)
                 Text(entity.stateDisplayName)
                     .font(.footnote)
-                    .foregroundStyle(entity.isAvailable ? .secondary : .red)
+                    .foregroundStyle(entity.isAvailable ? Color.secondary : Color.red)
             }
             Spacer(minLength: 8)
 
@@ -202,15 +202,15 @@ struct EntityRow: View {
     }
 
     private var iconTint: Color {
-        guard entity.isAvailable else { return .secondary }
+        guard entity.isAvailable else { return Color.secondary }
         switch entity.domain {
-        case "light": entity.isOn ? .yellow : .secondary
-        case "media_player": .purple
-        case "scene": .indigo
-        case "climate": .orange
-        case "cover": .blue
-        case "camera", "lock": .red
-        default: entity.isOn ? .accentColor : .secondary
+        case "light": entity.isOn ? Color.yellow : Color.secondary
+        case "media_player": Color.purple
+        case "scene": Color.indigo
+        case "climate": Color.orange
+        case "cover": Color.blue
+        case "camera", "lock": Color.red
+        default: entity.isOn ? Color.accentColor : Color.secondary
         }
     }
 }
