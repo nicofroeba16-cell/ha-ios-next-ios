@@ -82,11 +82,17 @@ jobs:
       - name: Verify compiled launch screen
         run: |
           set -euo pipefail
-          app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
+          derived="$HOME/Library/Developer/Xcode/DerivedData"
+          app_path="$(find "$derived" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
+          partial="$(find "$derived" -type f -name 'LaunchScreen-SBPartialInfo.plist' -print -quit)"
+          storyboard="$(find "$app_path" -type d -name 'LaunchScreen.storyboardc' -print -quit)"
           test -d "$app_path"
-          test "$(plutil -extract UILaunchStoryboardName raw -o - "$app_path/Info.plist")" = "LaunchScreen"
-          test -d "$app_path/Base.lproj/LaunchScreen.storyboardc" -o -d "$app_path/LaunchScreen.storyboardc"
+          test -f "$partial"
+          test -d "$storyboard"
           test -f "$app_path/Assets.car"
+          plutil -p "$partial" | tee launch-screen-metadata.log
+          grep -F "LaunchScreen-SBPartialInfo.plist" xcodebuild.log >/dev/null
+          grep -F "CompileStoryboard" xcodebuild.log >/dev/null
 
       - name: Run unit tests on iOS 27
         run: |
@@ -124,6 +130,7 @@ jobs:
           path: |
             xcodebuild.log
             packet-tunnel-entitlements.log
+            launch-screen-metadata.log
             TestResults.xcresult
             UITestResults.xcresult
             CardScreenshots
