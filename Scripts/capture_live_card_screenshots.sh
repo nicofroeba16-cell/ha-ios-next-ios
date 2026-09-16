@@ -11,7 +11,7 @@ test -n "$device_id"
 xcrun simctl boot "$device_id" 2>/dev/null || true
 xcrun simctl bootstatus "$device_id" -b
 
-app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print | head -n 1)"
+app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
 test -d "$app_path"
 
 rm -rf "$OUT_DIR"
