@@ -24,9 +24,12 @@ enum ProductAcceptanceScreen: String, CaseIterable {
 }
 
 private struct ProductAcceptanceOptions {
-    let colorScheme: ColorScheme?
+    let initialDarkMode: Bool
+    let switcherEnabled: Bool
+
     init(arguments: [String]) {
-        colorScheme = arguments.contains("--product-ui-test-dark") ? .dark : .light
+        initialDarkMode = arguments.contains("--product-ui-test-dark")
+        switcherEnabled = arguments.contains("--product-ui-test-switcher")
     }
 }
 
@@ -36,27 +39,82 @@ struct ProductAcceptanceRootView: View {
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private let screen: ProductAcceptanceScreen
     private let options: ProductAcceptanceOptions
+    @State private var screen: ProductAcceptanceScreen
+    @State private var isDarkMode: Bool
     @State private var appModel = AppModel.preview
     @State private var chatModel = ChatModel.preview
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
-        screen = Self.screen(from: arguments)
-        options = ProductAcceptanceOptions(arguments: arguments)
+        let initialScreen = Self.screen(from: arguments)
+        let options = ProductAcceptanceOptions(arguments: arguments)
+        self.options = options
+        _screen = State(initialValue: initialScreen)
+        _isDarkMode = State(initialValue: options.initialDarkMode)
     }
 
     var body: some View {
         Group {
             if let tab = screen.initialTab {
                 AppShellView(appModel: appModel, chatModel: chatModel, initialTab: tab)
+                    .id("shell-\(screen.rawValue)")
             } else {
                 standaloneScreen
+                    .id("standalone-\(screen.rawValue)")
             }
         }
-.preferredColorScheme(options.colorScheme)
+        .preferredColorScheme(isDarkMode ? .dark : .light)
+        .overlay(alignment: .topLeading) {
+            if options.switcherEnabled {
+                acceptanceSwitcher
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("product-acceptance-\(screen.rawValue)")
+        .accessibilityValue(accessibilityStateDescription)
+    }
+
+    private var accessibilityStateDescription: String {
+        "darkMode=\(isDarkMode);reduceMotion=\(reduceMotion);reduceTransparency=\(reduceTransparency);increasedContrast=\(colorSchemeContrast == .increased);dynamicTypeAccessibility=\(dynamicTypeSize.isAccessibilitySize)"
+    }
+
+    private var acceptanceSwitcher: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(Array(ProductAcceptanceScreen.allCases.prefix(5)), id: \.rawValue) { target in
+                    acceptanceButton(for: target)
+                }
+            }
+            HStack(spacing: 0) {
+                ForEach(Array(ProductAcceptanceScreen.allCases.dropFirst(5)), id: \.rawValue) { target in
+                    acceptanceButton(for: target)
+                }
+                Button {
+                    isDarkMode.toggle()
+                } label: {
+                    Color.clear
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Acceptance appearance toggle")
+                .accessibilityIdentifier("acceptance-toggle-appearance")
+            }
+        }
+        .zIndex(10_000)
+    }
+
+    private func acceptanceButton(for target: ProductAcceptanceScreen) -> some View {
+        Button {
+            screen = target
+        } label: {
+            Color.clear
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Acceptance screen \(target.rawValue)")
+        .accessibilityIdentifier("acceptance-switch-\(target.rawValue)")
     }
 
     @ViewBuilder

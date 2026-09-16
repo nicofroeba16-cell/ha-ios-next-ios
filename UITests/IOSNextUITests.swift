@@ -9,14 +9,12 @@ final class IOSNextUITests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        app?.terminate()
         app = nil
         XCUIDevice.shared.orientation = .portrait
     }
 
     @discardableResult
     private func launch(_ screen: String, extraArguments: [String] = []) -> XCUIApplication {
-        app?.terminate()
         let application = XCUIApplication()
         application.launchArguments = ["--product-ui-test-screen=\(screen)"] + extraArguments
         application.launch()
@@ -35,15 +33,51 @@ final class IOSNextUITests: XCTestCase {
         add(attachment)
     }
 
+    private func switchAcceptanceScreen(_ screen: String, in application: XCUIApplication) {
+        let switcher = application.buttons["acceptance-switch-\(screen)"].firstMatch
+        XCTAssertTrue(switcher.waitForExistence(timeout: 3))
+        XCTAssertTrue(switcher.isHittable)
+        switcher.tap()
+
+        let root = application.descendants(matching: .any)
+            .matching(identifier: "product-acceptance-\(screen)")
+            .firstMatch
+        XCTAssertTrue(root.waitForExistence(timeout: 5), "Product screen did not settle: \(screen)")
+    }
+
+    private func waitForAcceptanceAppearance(dark: Bool, in application: XCUIApplication) {
+        let root = application.descendants(matching: .any)
+            .matching(identifier: "product-acceptance-home")
+            .firstMatch
+        XCTAssertTrue(root.waitForExistence(timeout: 5))
+        let expected = "darkMode=\(dark)"
+        let predicate = NSPredicate(format: "value CONTAINS %@", expected)
+        let result = XCTWaiter.wait(
+            for: [XCTNSPredicateExpectation(predicate: predicate, object: root)],
+            timeout: 5
+        )
+        XCTAssertEqual(result, .completed, "Appearance did not settle to \(expected)")
+    }
+
     func testPrimaryProductScreensRenderLightAndDark() {
-        for (style, arguments) in [
-            ("light", []),
-            ("dark", ["--product-ui-test-dark"])
-        ] {
-            for screen in screens {
-                let application = launch(screen, extraArguments: arguments)
-                attachScreenshot("product-\(style)-\(screen)", app: application)
-            }
+        let application = launch("home", extraArguments: ["--product-ui-test-switcher"])
+        waitForAcceptanceAppearance(dark: false, in: application)
+
+        for screen in screens {
+            switchAcceptanceScreen(screen, in: application)
+            attachScreenshot("product-light-\(screen)", app: application)
+        }
+
+        switchAcceptanceScreen("home", in: application)
+        let appearanceToggle = application.buttons["acceptance-toggle-appearance"].firstMatch
+        XCTAssertTrue(appearanceToggle.waitForExistence(timeout: 3))
+        XCTAssertTrue(appearanceToggle.isHittable)
+        appearanceToggle.tap()
+        waitForAcceptanceAppearance(dark: true, in: application)
+
+        for screen in screens {
+            switchAcceptanceScreen(screen, in: application)
+            attachScreenshot("product-dark-\(screen)", app: application)
         }
     }
 
@@ -106,22 +140,22 @@ final class IOSNextUITests: XCTestCase {
     }
 
     func testOwnerAndWireGuardSafeEntryStates() {
-        var application = launch("owner")
+        let application = launch("owner", extraArguments: ["--product-ui-test-switcher"])
         XCTAssertTrue(application.staticTexts["Owner-Zugang nicht eingerichtet"].waitForExistence(timeout: 3))
         attachScreenshot("product-owner-entry", app: application)
 
-        application = launch("wireguard")
+        switchAcceptanceScreen("wireguard", in: application)
         XCTAssertTrue(application.navigationBars["WireGuard"].waitForExistence(timeout: 3))
         XCTAssertTrue(application.staticTexts["iOS Next WireGuard"].waitForExistence(timeout: 3))
         attachScreenshot("product-wireguard-entry", app: application)
     }
 
     private func accessibilityState(in application: XCUIApplication) -> String {
-        let probe = application.descendants(matching: .any)
-            .matching(identifier: "accessibility-state-probe")
+        let root = application.descendants(matching: .any)
+            .matching(identifier: "product-acceptance-home")
             .firstMatch
-        XCTAssertTrue(probe.waitForExistence(timeout: 5))
-        return probe.value as? String ?? ""
+        XCTAssertTrue(root.waitForExistence(timeout: 5))
+        return root.value as? String ?? ""
     }
 
     func testAccessibilityCoreScreenRenders() {
@@ -156,15 +190,25 @@ final class IOSNextUITests: XCTestCase {
     }
 
     func testIPadPortraitLandscapeCoreScreens() {
+        let application = launch("home", extraArguments: ["--product-ui-test-switcher"])
+        waitForAcceptanceAppearance(dark: false, in: application)
+
         XCUIDevice.shared.orientation = .portrait
         for screen in ["home", "media", "system"] {
-            let application = launch(screen)
+            switchAcceptanceScreen(screen, in: application)
             attachScreenshot("ipad-portrait-\(screen)", app: application)
         }
 
+        switchAcceptanceScreen("home", in: application)
+        let appearanceToggle = application.buttons["acceptance-toggle-appearance"].firstMatch
+        XCTAssertTrue(appearanceToggle.waitForExistence(timeout: 3))
+        XCTAssertTrue(appearanceToggle.isHittable)
+        appearanceToggle.tap()
+        waitForAcceptanceAppearance(dark: true, in: application)
+
         XCUIDevice.shared.orientation = .landscapeLeft
         for screen in ["home", "media", "system"] {
-            let application = launch(screen, extraArguments: ["--product-ui-test-dark"])
+            switchAcceptanceScreen(screen, in: application)
             attachScreenshot("ipad-landscape-dark-\(screen)", app: application)
         }
     }
