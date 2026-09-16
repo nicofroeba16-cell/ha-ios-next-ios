@@ -56,7 +56,7 @@ final class InMemoryVoiceRecorder {
     var isPreparing = false
     var duration: TimeInterval = 0
 
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine?
     private let accumulator = PCMAccumulator()
     private var timer: Timer?
     private var startedAt: Date?
@@ -69,17 +69,20 @@ final class InMemoryVoiceRecorder {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
+        let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         accumulator.reset(sampleRate: format.sampleRate)
-        input.installTap(onBus: 0, bufferSize: 1_024, format: format) { [accumulator] buffer, _ in
-            accumulator.append(buffer)
+        try input.installAudioTap(onBus: 0, bufferSize: 1_024, format: format) { [accumulator] buffer, _ in
+            accumulator.append(AVAudioPCMBuffer(copying: buffer))
         }
         engine.prepare()
         do {
             try engine.start()
+            self.engine = engine
         } catch {
-            input.removeTap(onBus: 0)
+            engine.stop()
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
             throw error
         }
         startedAt = .now
@@ -97,8 +100,8 @@ final class InMemoryVoiceRecorder {
         guard isRecording else { return nil }
         timer?.invalidate()
         timer = nil
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        engine?.stop()
+        engine = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         isRecording = false
         startedAt = nil

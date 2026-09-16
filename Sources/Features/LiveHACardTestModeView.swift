@@ -57,6 +57,8 @@ struct LiveHACardTestModeView: View {
             testLabel(.sections)
             VStack(alignment: .leading, spacing: 14) {
                 MushroomTitleMirror(title: "Zuhause", subtitle: "Health · System")
+                    .padding(18)
+                    .iosNextCard()
                     .accessibilityIdentifier(id(.mushroomTitle))
 
                 testLabel(.grid)
@@ -86,8 +88,6 @@ struct LiveHACardTestModeView: View {
                 ConditionalMirror()
                     .accessibilityIdentifier(id(.conditional))
             }
-            .padding(16)
-            .iosNextCard()
         }
         .accessibilityIdentifier(id(.sections))
     }
@@ -288,7 +288,7 @@ private struct IOSLightMirror: View {
                     Image(systemName: "power")
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .buttonBorderShape(.circle)
             }
             Slider(value: $brightness, in: 0...1)
@@ -329,7 +329,7 @@ private struct IOSMediaMirror: View {
                     Image(systemName: playing ? "pause.fill" : "play.fill")
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .buttonBorderShape(.circle)
             }
             Slider(value: $position)
@@ -362,30 +362,37 @@ private struct NavbarMirror: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Navbar").font(.title3.bold())
-            HStack(spacing: 4) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    Button {
+        HStack(spacing: 6) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                Button {
+                    withAnimation(.smooth(duration: 0.28)) {
                         selection = index
-                    } label: {
-                        VStack(spacing: 5) {
-                            Image(systemName: item.0)
-                            Text(item.1).font(.caption2)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .foregroundStyle(selection == index ? Color.accentColor : Color.secondary)
-                        .padding(.vertical, 9)
-                        .background(
-                            selection == index ? Color.accentColor.opacity(0.12) : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        )
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: item.0)
+                            .font(.body.weight(.semibold))
+                        Text(item.1)
+                            .font(.caption2.weight(selection == index ? .semibold : .regular))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(selection == index ? Color.accentColor : Color.secondary)
+                    .padding(.vertical, 10)
+                    .background(
+                        selection == index ? Color.accentColor.opacity(0.13) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    )
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
-        .padding(16)
-        .iosNextCard()
+        .padding(8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
     }
 }

@@ -9,16 +9,33 @@ enum IOSNextLayout {
 }
 
 struct IOSNextBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(uiColor: .systemGroupedBackground),
-                Color.accentColor.opacity(0.055),
-                Color(uiColor: .systemGroupedBackground)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ZStack {
+            Color(uiColor: .systemGroupedBackground)
+
+            LinearGradient(
+                colors: [
+                    Color.accentColor.opacity(colorScheme == .dark ? 0.22 : 0.16),
+                    Color.indigo.opacity(colorScheme == .dark ? 0.12 : 0.075),
+                    Color.cyan.opacity(colorScheme == .dark ? 0.10 : 0.055),
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [
+                    Color.accentColor.opacity(colorScheme == .dark ? 0.12 : 0.08),
+                    Color.clear
+                ],
+                center: .bottomTrailing,
+                startRadius: 24,
+                endRadius: 520
+            )
+        }
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
@@ -252,17 +269,35 @@ struct IOSNextErrorBanner: View {
 
 private struct IOSNextCardModifier: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: IOSNextLayout.cardRadius, style: .continuous)
+
         content
-            .background(
-                reduceTransparency ? AnyShapeStyle(Color(uiColor: .secondarySystemGroupedBackground)) : AnyShapeStyle(.regularMaterial),
-                in: RoundedRectangle(cornerRadius: IOSNextLayout.cardRadius, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: IOSNextLayout.cardRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(reduceTransparency ? 0 : 0.12), lineWidth: 0.5)
+            .background {
+                if reduceTransparency {
+                    shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
+                } else {
+                    shape
+                        .fill(.thinMaterial)
+                        .overlay {
+                            shape.fill(Color.accentColor.opacity(colorScheme == .dark ? 0.045 : 0.025))
+                        }
+                }
             }
+            .overlay {
+                shape.strokeBorder(
+                    Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.065),
+                    lineWidth: 0.5
+                )
+            }
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.075),
+                radius: 16,
+                x: 0,
+                y: 6
+            )
     }
 }
 
