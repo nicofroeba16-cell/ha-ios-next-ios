@@ -101,6 +101,9 @@ final class IOSNextUITests: XCTestCase {
 
         let fireTV = application.buttons["media-player-link-media_player.fire_tv_companion"]
         XCTAssertTrue(fireTV.waitForExistence(timeout: 3))
+        if !fireTV.isHittable {
+            application.swipeUp()
+        }
         XCTAssertTrue(fireTV.isHittable)
         fireTV.tap()
 

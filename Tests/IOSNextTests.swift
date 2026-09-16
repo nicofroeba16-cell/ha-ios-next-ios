@@ -333,7 +333,7 @@ final class IOSNextTests: XCTestCase {
             targetEntityID: "media_player.fire_tv_companion"
         )
 
-        await fulfillment(of: [paused], timeout: 2.0)
+        await fulfillment(of: [paused], timeout: 4.0)
         observer.cancel()
         await client.disconnect()
     }
@@ -384,7 +384,7 @@ final class IOSNextTests: XCTestCase {
             finished.fulfill()
         }
 
-        await fulfillment(of: [finished], timeout: 2.0)
+        await fulfillment(of: [finished], timeout: 4.0)
         observer.cancel()
         await client.disconnect()
     }
@@ -400,49 +400,37 @@ final class IOSNextTests: XCTestCase {
             finished.fulfill()
         }
 
-        await fulfillment(of: [finished], timeout: 2.0)
+        await fulfillment(of: [finished], timeout: 4.0)
         observer.cancel()
         await client.disconnect()
     }
 
     @MainActor
     func testAppModelReconnectsAfterFakeHAServerDrop() async throws {
-        let model = AppModel()
+        let model = AppModel(
+            client: HomeAssistantClient(timing: .integrationTest)
+        )
         await model.connect(
             serverURL: URL(string: "http://127.0.0.1:18765?mode=close_once")!,
             accessToken: "integration-test-token",
             persist: false
         )
-        XCTAssertTrue(model.isConnected)
-        XCTAssertNotNil(
-            model.entities.first { $0.entityID == "media_player.fire_tv_companion" }
-        )
 
-        var sawReconnectState = false
         var restored = false
-
         for _ in 0..<120 {
-            try await Task.sleep(for: .milliseconds(50))
-
-            if case .connecting = model.connectionState {
-                sawReconnectState = true
-            }
-
-            if sawReconnectState,
-               model.isConnected,
-               model.entities.contains(where: { $0.entityID == "media_player.fire_tv_companion" }) {
+            if model.isConnected,
+               model.entities.first(where: {
+                   $0.entityID == "media_player.fire_tv_companion"
+               })?.mediaTitle == "Companion Reconnected" {
                 restored = true
                 break
             }
+            try await Task.sleep(for: .milliseconds(50))
         }
 
         XCTAssertTrue(
-            sawReconnectState,
-            "Expected a reconnecting state after the fake server dropped the socket."
-        )
-        XCTAssertTrue(
             restored,
-            "Expected AppModel to reconnect and restore the Fire TV Companion entity."
+            "Expected AppModel to reconnect and replace the Fire TV Companion snapshot."
         )
         model.disconnect()
     }

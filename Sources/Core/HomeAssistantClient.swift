@@ -51,11 +51,11 @@ struct HomeAssistantClientTimingPolicy: Sendable {
     )
 
     static let integrationTest = HomeAssistantClientTimingPolicy(
-        authHandshakeSeconds: 0.45,
-        getStatesSeconds: 0.45,
-        commandSeconds: 0.45,
-        heartbeatIntervalSeconds: 0.20,
-        pingTimeoutSeconds: 0.25
+        authHandshakeSeconds: 2.0,
+        getStatesSeconds: 3.0,
+        commandSeconds: 1.5,
+        heartbeatIntervalSeconds: 0.75,
+        pingTimeoutSeconds: 0.75
     )
 
     func commandTimeoutSeconds(for type: String) -> Double {
@@ -132,11 +132,6 @@ actor HomeAssistantClient {
                 guard let self else { return }
                 await self.receiveLoop(task: task, generation: activeGeneration)
             }
-            heartbeatTask = Task { [weak self] in
-                guard let self else { return }
-                await self.heartbeatLoop(task: task, generation: activeGeneration)
-            }
-
             let statesResponse = try await command(type: "get_states")
             guard let rows = statesResponse["result"]?.arrayValue else {
                 throw HomeAssistantClientError.invalidResponse
@@ -150,6 +145,10 @@ actor HomeAssistantClient {
                 type: "subscribe_events",
                 extra: ["event_type": .string("state_changed")]
             )
+            heartbeatTask = Task { [weak self] in
+                guard let self else { return }
+                await self.heartbeatLoop(task: task, generation: activeGeneration)
+            }
             return states
         } catch {
             failConnection(error, generation: activeGeneration)

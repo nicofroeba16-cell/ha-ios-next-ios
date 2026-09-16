@@ -63,6 +63,7 @@ run_accessibility_variant() {
   "$@"
   record_accessibility_state "$iphone_id" "$name"
 
+  xcrun simctl terminate "$iphone_id" de.nicofroeba16.iosnext 2>/dev/null || true
   rm -rf "$OUT_DIR/$name.xcresult"
   xcodebuild test-without-building \
     -project "$PROJECT" \
@@ -76,6 +77,7 @@ run_accessibility_variant() {
 xcrun simctl boot "$iphone_id" 2>/dev/null || true
 xcrun simctl bootstatus "$iphone_id" -b
 reset_accessibility "$iphone_id"
+xcrun simctl terminate "$iphone_id" de.nicofroeba16.iosnext 2>/dev/null || true
 
 xcodebuild test-without-building \
   -project "$PROJECT" \
@@ -105,6 +107,7 @@ reset_accessibility "$iphone_id"
 xcrun simctl boot "$ipad_id" 2>/dev/null || true
 xcrun simctl bootstatus "$ipad_id" -b
 reset_accessibility "$ipad_id"
+xcrun simctl terminate "$ipad_id" de.nicofroeba16.iosnext 2>/dev/null || true
 
 xcodebuild test-without-building \
   -project "$PROJECT" \

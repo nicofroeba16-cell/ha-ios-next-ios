@@ -27,7 +27,7 @@ final class AppModel {
     var activeActionEntityIDs: Set<String> = []
     var lastActionError: String?
 
-    private let client = HomeAssistantClient()
+    private let client: HomeAssistantClient
     private let oauthService = HomeAssistantOAuthService()
     private let serverURLKey = "homeAssistantServerURL"
     private let tokenAccount = "homeAssistantDeveloperToken"
@@ -42,6 +42,10 @@ final class AppModel {
     private var stateFlushTask: Task<Void, Never>?
     private var networkAvailable = true
     private var applicationIsActive = true
+
+    init(client: HomeAssistantClient = HomeAssistantClient()) {
+        self.client = client
+    }
 
     var isConnected: Bool {
         if case .connected = connectionState { return true }

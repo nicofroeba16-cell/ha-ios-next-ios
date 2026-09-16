@@ -115,6 +115,10 @@ jobs:
             -resultBundlePath FastTestResults.xcresult \
             | tee -a xcodebuild-fast.log
 
+      - name: Show fake Home Assistant log on failure
+        if: failure()
+        run: cat fake-ha.log || true
+
       - name: Stop fake Home Assistant test server
         if: always()
         run: |

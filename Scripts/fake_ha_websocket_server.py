@@ -81,13 +81,13 @@ def state(entity_id, value, attrs):
     }
 
 
-def fire_tv_state(value="playing"):
+def fire_tv_state(value="playing", title="Companion Testfilm"):
     return state(
         "media_player.fire_tv_companion",
         value,
         {
             "friendly_name": "Fire TV Companion",
-            "media_title": "Companion Testfilm",
+            "media_title": title,
             "media_content_type": "video",
             "media_position": 42,
             "media_duration": 1800,
@@ -140,6 +140,11 @@ class Handler(socketserver.BaseRequestHandler):
                 mode_counts[mode] = mode_counts.get(mode, 0) + 1
                 connection_number = mode_counts[mode]
 
+            print(
+                f"connection mode={mode} number={connection_number}",
+                flush=True,
+            )
+
             if mode == "auth_stall":
                 time.sleep(5)
                 return
@@ -163,6 +168,10 @@ class Handler(socketserver.BaseRequestHandler):
                 message = json.loads(payload.decode("utf-8"))
                 msg_type = message.get("type")
                 msg_id = message.get("id")
+                print(
+                    f"message mode={mode} number={connection_number} type={msg_type} id={msg_id}",
+                    flush=True,
+                )
 
                 if msg_type == "auth":
                     send_json(sock, {"type": "auth_ok", "ha_version": "2026.9.0"})
@@ -183,7 +192,15 @@ class Handler(socketserver.BaseRequestHandler):
                                         "brightness": 128,
                                     },
                                 ),
-                                fire_tv_state(),
+                                fire_tv_state(
+                                    title=(
+                                        "Companion Initial"
+                                        if mode == "close_once" and connection_number == 1
+                                        else "Companion Reconnected"
+                                        if mode == "close_once"
+                                        else "Companion Testfilm"
+                                    )
+                                ),
                             ],
                         },
                     )
@@ -203,11 +220,9 @@ class Handler(socketserver.BaseRequestHandler):
                         mode == "close_once" and connection_number == 1
                     )
                     if should_close:
-                        time.sleep(0.25)
-                        try:
-                            send_frame(sock, 0x8, struct.pack("!H", 1001))
-                        finally:
-                            return
+                        time.sleep(1.0)
+                        send_frame(sock, 0x8, struct.pack("!H", 1001))
+                        return
 
                 elif msg_type == "call_service":
                     if mode == "call_stall":
