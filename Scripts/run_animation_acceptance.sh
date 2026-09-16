@@ -131,10 +131,11 @@ test "$unique_stage_hashes" -eq 8
 
 record_animation_video() {
   local video="$OUT_DIR/animation-acceptance.mp4"
-  local attempt bytes
+  local attempt bytes validation_log
 
   for attempt in 1 2 3; do
-    rm -f "$video"
+    validation_log="$OUT_DIR/logs/video-attempt-$attempt-validation.log"
+    rm -f "$video" "$validation_log"
     xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
 
     xcrun simctl io "$device_id" recordVideo --codec=h264 "$video"       >"$OUT_DIR/logs/video-attempt-$attempt-record.log" 2>&1 &
@@ -151,7 +152,7 @@ record_animation_video() {
 
     if [ -s "$video" ]; then
       bytes="$(stat -f%z "$video")"
-      if [ "$bytes" -gt 200000 ]; then
+      if [ "$bytes" -gt 200000 ]         && xcrun swift Scripts/validate_visual_video.swift "$video" animation >"$validation_log" 2>&1; then
         echo "$bytes"
         return 0
       fi
@@ -175,6 +176,7 @@ appearance=$APPEARANCE
 stage_screenshots=$stage_count
 unique_stage_hashes=$unique_stage_hashes
 video_bytes=$video_bytes
+video_frame_validation=true
 sequence=app-start,navigation,light-toggle,conditional,media-play-pause,slider,chat,owner-area
 capture_strategy=nonce-ready-marker-plus-frame-settle-plus-validation
 video_retry=true
