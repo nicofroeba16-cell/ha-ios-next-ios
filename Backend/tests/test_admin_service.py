@@ -168,6 +168,92 @@ class AdminStoreTests(unittest.TestCase):
             self.store.approve_support_ticket(ticket["id"], "ios-app", "nico")
 
 
+    def test_approved_status_cannot_be_set_without_dispatch(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Bitte prüfen")
+        with self.assertRaises(ValueError):
+            self.store.update_support_ticket_status(ticket["id"], "approved", "nico")
+        self.assertEqual(self.store.support_ticket(ticket["id"])["status"], "open")
+        self.assertEqual(self.store.project_dispatches(), [])
+
+    def test_sensitive_ticket_content_is_rejected_before_persistence(self) -> None:
+        with self.assertRaises(ValueError):
+            self.store.create_support_ticket("mika", "api_key=1234567890abcdef")
+        self.assertEqual(self.store.support_tickets(), [])
+
+    def test_legacy_sensitive_ticket_cannot_be_dispatched(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Bitte prüfen")
+        self.store._database.execute(
+            "UPDATE support_ticket_messages SET body = ? WHERE ticket_id = ?",
+            ("token: 1234567890abcdef", ticket["id"]),
+        )
+        self.store._database.commit()
+        with self.assertRaises(ValueError):
+            self.store.approve_support_ticket(ticket["id"], "general", "nico")
+        self.assertEqual(self.store.project_dispatches(), [])
+        self.assertEqual(list(self.store.project_queue_dir.rglob("*.json")), [])
+
+    def test_same_project_approval_repairs_missing_queue_file(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Fire TV bitte prüfen")
+        dispatch = self.store.approve_support_ticket(ticket["id"], "fire-tv", "nico")
+        queue_file = Path(dispatch["queue_file"])
+        queue_file.unlink()
+        repaired = self.store.approve_support_ticket(ticket["id"], "fire-tv", "nico")
+        self.assertEqual(repaired["id"], dispatch["id"])
+        self.assertEqual(repaired["state"], "queued")
+        self.assertTrue(queue_file.is_file())
+
+    def test_concurrent_approval_creates_exactly_one_dispatch(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Fire TV bitte prüfen")
+        results: list[str] = []
+        errors: list[Exception] = []
+        barrier = threading.Barrier(8)
+
+        def approve() -> None:
+            try:
+                barrier.wait()
+                result = self.store.approve_support_ticket(ticket["id"], "fire-tv", "nico")
+                results.append(result["id"])
+            except Exception as error:
+                errors.append(error)
+
+        threads = [threading.Thread(target=approve) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=3)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(set(results)), 1)
+        self.assertEqual(len(self.store.project_dispatches()), 1)
+        self.assertEqual(len(list(self.store.project_queue_dir.rglob("*.json"))), 1)
+
+    def test_concurrent_different_project_approval_never_switches_target(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Bitte prüfen")
+        barrier = threading.Barrier(2)
+        outcomes: list[tuple[str, str]] = []
+
+        def approve(project_id: str) -> None:
+            barrier.wait()
+            try:
+                result = self.store.approve_support_ticket(ticket["id"], project_id, "nico")
+                outcomes.append(("ok", result["project_id"]))
+            except RuntimeError:
+                outcomes.append(("conflict", project_id))
+
+        threads = [
+            threading.Thread(target=approve, args=("fire-tv",)),
+            threading.Thread(target=approve, args=("ios-app",)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=3)
+        self.assertEqual(sorted(kind for kind, _ in outcomes), ["conflict", "ok"])
+        dispatches = self.store.project_dispatches()
+        self.assertEqual(len(dispatches), 1)
+        self.assertEqual(self.store.support_ticket(ticket["id"])["dispatched_project_id"], dispatches[0]["project_id"])
+
+
+
 class EphemeralChatRelayTests(unittest.TestCase):
     def envelope(self, message_id: str = "message-1") -> dict:
         return {
@@ -471,6 +557,41 @@ class AdminHTTPServerTests(unittest.TestCase):
             token="m" * 32,
         )
         self.assertEqual(status, 401)
+
+
+    def test_status_endpoint_cannot_fake_approval(self) -> None:
+        status, body = self.chat_request(
+            "POST", "/v1/chat/tickets", {"message": "Bitte prüfen"}, token="m" * 32
+        )
+        self.assertEqual(status, 201)
+        ticket_id = json.loads(body)["id"]
+        status, _ = self.request(
+            "POST",
+            f"/v1/admin/tickets/{ticket_id}/status",
+            payload={"status": "approved"},
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(self.store.project_dispatches(), [])
+
+    def test_sensitive_ticket_payload_returns_bad_request_and_is_not_stored(self) -> None:
+        status, _ = self.chat_request(
+            "POST",
+            "/v1/chat/tickets",
+            {"message": "access_token=1234567890abcdef"},
+            token="m" * 32,
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(self.store.support_tickets(), [])
+
+    def test_owner_token_must_be_distinct_from_chat_tokens(self) -> None:
+        with self.assertRaises(ValueError):
+            AdminHTTPServer(
+                ("127.0.0.1", 0),
+                self.store,
+                "z" * 32,
+                chat_tokens={"z" * 32: "nico"},
+            )
+
 
 
 if __name__ == "__main__":

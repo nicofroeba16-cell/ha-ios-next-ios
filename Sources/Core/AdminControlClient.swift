@@ -377,6 +377,7 @@ final class AdminControlModel {
         }
         do {
             lastError = nil
+            try await authenticateOwner(reason: "Ticket an \(projectID) freigeben")
             lastDispatch = try await client.approveTicket(
                 ticketID: id,
                 projectID: projectID,

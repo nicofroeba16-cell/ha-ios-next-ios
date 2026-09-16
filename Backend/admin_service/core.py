@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 import threading
@@ -269,6 +270,7 @@ class AdminStore:
     def create_support_ticket(self, requester_user_id: str, message: str) -> dict[str, Any]:
         requester_user_id = self._validate_identifier(requester_user_id, "requester_user_id")
         message = self._validate_ticket_message(message)
+        self._reject_sensitive_ticket_content(message)
         ticket_id = f"ticket-{uuid.uuid4()}"
         message_id = f"ticket-message-{uuid.uuid4()}"
         created_at = utc_now()
@@ -351,6 +353,7 @@ class AdminStore:
         if author_role not in {"owner", "member"}:
             raise ValueError("invalid author_role")
         message = self._validate_ticket_message(message)
+        self._reject_sensitive_ticket_content(message)
         created_at = utc_now()
         with self._lock:
             ticket = self._database.execute(
@@ -387,7 +390,7 @@ class AdminStore:
     def update_support_ticket_status(self, ticket_id: str, status: str, actor: str) -> dict[str, Any]:
         ticket_id = self._validate_identifier(ticket_id, "ticket_id", max_length=80)
         actor = self._validate_identifier(actor, "actor")
-        if status not in {"open", "in_progress", "approved", "resolved"}:
+        if status not in {"open", "in_progress", "resolved"}:
             raise ValueError("invalid ticket status")
         updated_at = utc_now()
         with self._lock:
@@ -482,73 +485,106 @@ class AdminStore:
             ).fetchone()
             if existing is not None:
                 if existing["project_id"] != project_id:
+                    self._write_audit(actor, f"ticket-dispatch-conflict-{project_id}", "rejected")
                     raise RuntimeError("ticket_already_dispatched")
-                return dict(existing)
+                return self._finalize_dispatch_file(dict(existing))
 
             ticket = self.support_ticket(ticket_id)
+            for message in ticket.get("messages", []):
+                self._reject_sensitive_ticket_content(message.get("body", ""))
             dispatch_id = f"dispatch-{uuid.uuid4()}"
             approved_at = utc_now()
-            route = PROJECT_ROUTES[project_id]
             queue_dir = self.project_queue_dir / project_id
             queue_dir.mkdir(parents=True, exist_ok=True)
             queue_path = queue_dir / f"{dispatch_id}.json"
-            payload = {
-                "schema_version": 1,
-                "dispatch_id": dispatch_id,
-                "ticket_id": ticket_id,
-                "project": {
-                    "id": project_id,
-                    "title": route["title"],
-                    "repository": route["repository"],
-                },
-                "approved_by": actor,
-                "approved_at": approved_at,
-                "ticket": ticket,
-                "instruction": "Bearbeite das freigegebene Owner-Ticket im Zielprojekt. Änderungen müssen den Regeln des Zielprojekts folgen.",
-            }
-            temporary_path = queue_path.with_suffix(".json.tmp")
             try:
+                self._database.execute("BEGIN IMMEDIATE")
                 self._database.execute(
                     """
                     INSERT INTO project_dispatches(
                         id, ticket_id, project_id, state, approved_by, approved_at, queue_file
-                    ) VALUES (?, ?, ?, 'queued', ?, ?, ?)
+                    ) VALUES (?, ?, ?, 'preparing', ?, ?, ?)
                     """,
-                    (
-                        dispatch_id,
-                        ticket_id,
-                        project_id,
-                        actor,
-                        approved_at,
-                        str(queue_path),
-                    ),
+                    (dispatch_id, ticket_id, project_id, actor, approved_at, str(queue_path)),
                 )
                 self._database.execute(
                     "UPDATE support_tickets SET status = 'approved', updated_at = ? WHERE id = ?",
                     (approved_at, ticket_id),
                 )
-                temporary_path.write_text(
-                    json.dumps(payload, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
+                self._database.execute(
+                    "INSERT INTO audit(id, timestamp, actor, action, result) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        f"audit-{uuid.uuid4()}",
+                        utc_now(),
+                        actor,
+                        f"ticket-approve-{project_id}",
+                        "success",
+                    ),
                 )
-                temporary_path.replace(queue_path)
                 self._database.commit()
             except Exception:
                 self._database.rollback()
-                temporary_path.unlink(missing_ok=True)
-                queue_path.unlink(missing_ok=True)
                 raise
 
-        self._write_audit(actor, f"ticket-approve-{project_id}", "success")
-        return {
-            "id": dispatch_id,
-            "ticket_id": ticket_id,
-            "project_id": project_id,
-            "state": "queued",
-            "approved_by": actor,
-            "approved_at": approved_at,
-            "queue_file": str(queue_path),
+            return self._finalize_dispatch_file({
+                "id": dispatch_id,
+                "ticket_id": ticket_id,
+                "project_id": project_id,
+                "state": "preparing",
+                "approved_by": actor,
+                "approved_at": approved_at,
+                "queue_file": str(queue_path),
+            })
+
+    def _finalize_dispatch_file(self, dispatch: dict[str, Any]) -> dict[str, Any]:
+        queue_path = Path(dispatch["queue_file"])
+        if self.project_queue_dir not in queue_path.resolve().parents:
+            raise RuntimeError("unsafe_dispatch_path")
+        ticket = self.support_ticket(dispatch["ticket_id"])
+        for message in ticket.get("messages", []):
+            self._reject_sensitive_ticket_content(message.get("body", ""))
+        route = PROJECT_ROUTES[dispatch["project_id"]]
+        payload = {
+            "schema_version": 1,
+            "dispatch_id": dispatch["id"],
+            "ticket_id": dispatch["ticket_id"],
+            "project": {
+                "id": dispatch["project_id"],
+                "title": route["title"],
+                "repository": route["repository"],
+            },
+            "approved_by": dispatch["approved_by"],
+            "approved_at": dispatch["approved_at"],
+            "ticket": ticket,
+            "instruction": "Bearbeite das freigegebene Owner-Ticket im Zielprojekt. Änderungen müssen den Regeln des Zielprojekts folgen.",
         }
+        temporary_path = queue_path.with_suffix(".json.tmp")
+        try:
+            temporary_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            temporary_path.replace(queue_path)
+        except Exception:
+            temporary_path.unlink(missing_ok=True)
+            self._write_audit(
+                dispatch["approved_by"],
+                f"project-dispatch-{dispatch['project_id']}",
+                "queue_write_failed",
+            )
+            raise
+        self._database.execute(
+            "UPDATE project_dispatches SET state = 'queued' WHERE id = ?",
+            (dispatch["id"],),
+        )
+        self._database.commit()
+        self._write_audit(
+            dispatch["approved_by"],
+            f"project-dispatch-{dispatch['project_id']}",
+            "success",
+        )
+        dispatch["state"] = "queued"
+        return dispatch
 
     def project_dispatches(self, limit: int = 100) -> list[dict[str, Any]]:
         safe_limit = min(max(limit, 1), 200)
@@ -570,6 +606,31 @@ class AdminStore:
         if not 1 <= len(normalized) <= 4000:
             raise ValueError("invalid ticket message")
         return normalized
+
+
+    @staticmethod
+    def _reject_sensitive_ticket_content(value: str) -> None:
+        lowered = value.lower()
+        markers = (
+            "-----begin private key-----",
+            "authorization: bearer ",
+            "bearer eyj",
+            "ghp_",
+            "github_pat_",
+            "api_key=",
+            "api-key=",
+            "access_token=",
+            "refresh_token=",
+            "password=",
+            "secret=",
+        )
+        labeled_secret = re.search(
+            r"(?i)\b(?:token|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|"
+            r"password|secret|private[_ -]?key)\b\s*[:=]\s*\S{8,}",
+            value,
+        )
+        if any(marker in lowered for marker in markers) or labeled_secret:
+            raise ValueError("sensitive_ticket_content")
 
     def validate_chat_envelope(self, payload: dict[str, Any]) -> dict[str, Any]:
         message_id = self._required_identifier(payload, "id", max_length=80)

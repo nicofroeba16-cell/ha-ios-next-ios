@@ -21,6 +21,8 @@ Owner-approved tickets are converted into project work orders only after explici
 4. Only POST /v1/admin/tickets/<id>/approve can create a dispatch.
 5. The backend writes an atomic JSON work order to project-queue/<project-id>/.
 6. A project worker may consume only completed .json files, never .tmp files.
+7. Recognizable secrets/credentials are rejected before ticket persistence and checked again before dispatch.
+8. A repeated approval for the same project is idempotent and repairs a missing queue file; a different project conflicts.
 
 A normal chat token cannot approve or dispatch a ticket.
 

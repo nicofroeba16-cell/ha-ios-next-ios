@@ -128,7 +128,7 @@ private struct OwnerTicketConversationView: View {
             }
             Button("Abbrechen", role: .cancel) {}
         } message: {
-            Text("Erst nach deiner Freigabe wird ein Work Order für das ausgewählte Projekt erzeugt.")
+            Text("Ziel: \(projectTitle(selectedProjectID)). Erst nach deiner Face-ID-Bestätigung wird genau ein Work Order erzeugt.")
         }
     }
 

@@ -37,7 +37,7 @@ Support tickets are deliberately separate from the ephemeral E2EE chat.
 
 These endpoints require the owner token. Ticket replies from the Owner UI therefore cannot be authorized with a normal chat token. The Owner UI remains protected by the existing server-side owner session and local Face ID gate.
 
-Ticket states are open, in_progress, and resolved.
+Ticket states writable through the status endpoint are open, in_progress, and resolved. The approved state is internal and can only be reached by a successful owner approval/dispatch transaction.
 
 
 ## Owner-approved project routing
@@ -53,6 +53,9 @@ Approval is idempotent for the same project and conflicts if the same ticket is 
 1. records the owner identity and approval timestamp,
 2. sets the ticket status to approved,
 3. creates exactly one persistent project dispatch,
-4. writes an atomic work-order JSON file under admin-state/project-queue/<project-id>/.
+4. records an auditable dispatch intent before queue publication,
+5. publishes the work-order JSON atomically under admin-state/project-queue/<project-id>/. Missing queue files are repairable by an idempotent repeat approval for the same project.
+
+Ticket messages containing recognizable credentials, bearer tokens, API keys, passwords, private keys, or GitHub tokens are rejected and cannot be dispatched into work orders.
 
 The project suggestion is advisory only. The Owner UI lets the owner change the project before approving.

@@ -143,9 +143,13 @@ class AdminHTTPServer(ThreadingHTTPServer):
         chat_tokens: dict[str, str] | None = None,
     ) -> None:
         super().__init__(address, AdminRequestHandler)
+        resolved_chat_tokens = chat_tokens or {}
+        if any(hmac.compare_digest(owner_token, token) for token in resolved_chat_tokens):
+            self.server_close()
+            raise ValueError("owner_token_must_be_distinct_from_chat_tokens")
         self.store = store
         self.owner_token = owner_token
-        self.chat_tokens = chat_tokens or {}
+        self.chat_tokens = resolved_chat_tokens
         self.rate_limiter = SlidingWindowRateLimiter()
         self.chat_rate_limiter = SlidingWindowRateLimiter(requests=600)
         self.chat_relay = EphemeralChatRelay()
@@ -369,7 +373,9 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             if str(error) == "ticket_already_dispatched":
                 self._json(HTTPStatus.CONFLICT, {"error": "ticket_already_dispatched"})
             else:
-                raise
+                self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "dispatch_failed"})
+        except OSError:
+            self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "queue_write_failed"})
 
     def _read_json(self) -> dict[str, Any]:
         try:
@@ -443,6 +449,8 @@ def main() -> None:
     for token, user_id in raw_chat_tokens.items():
         if not isinstance(token, str) or len(token) < 32:
             raise SystemExit("Every chat token must contain at least 32 characters")
+        if hmac.compare_digest(token, owner_token):
+            raise SystemExit("Owner token and chat tokens must be distinct")
         try:
             chat_tokens[token] = AdminStore._validate_identifier(user_id, "user_id")
         except ValueError as error:
