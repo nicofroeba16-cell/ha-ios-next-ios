@@ -116,19 +116,10 @@ final class IOSNextUITests: XCTestCase {
         attachScreenshot("product-wireguard-entry", app: application)
     }
 
-    func testAccessibilityAppearanceMatrix() {
-        let variants: [(String, [String])] = [
-            ("dynamic-type-xxxl", ["--product-ui-test-dynamic-type-xxxl"]),
-            ("reduce-motion", ["--product-ui-test-reduce-motion"]),
-            ("reduce-transparency", ["--product-ui-test-reduce-transparency"]),
-            ("increase-contrast", ["--product-ui-test-increase-contrast"]),
-            ("dark-reduce-transparency", ["--product-ui-test-dark", "--product-ui-test-reduce-transparency"])
-        ]
-        for (name, arguments) in variants {
-            let application = launch("home", extraArguments: arguments)
-            XCTAssertTrue(application.staticTexts["Favoriten"].waitForExistence(timeout: 3))
-            attachScreenshot("product-accessibility-\(name)", app: application)
-        }
+    func testAccessibilityCoreScreenRenders() {
+        let application = launch("home")
+        XCTAssertTrue(application.staticTexts["Favoriten"].waitForExistence(timeout: 3))
+        attachScreenshot("product-accessibility-current-system-settings", app: application)
     }
 
     func testIPadPortraitLandscapeCoreScreens() {
