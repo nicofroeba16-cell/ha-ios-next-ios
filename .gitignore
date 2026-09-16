@@ -2,6 +2,7 @@ Failed to create stream fd: Operation not permitted
 Failed to create stream fd: Operation not permitted
 Failed to create stream fd: Operation not permitted
 .DS_Store
+.build-dependencies/
 DerivedData/
 build/
 *.xcuserstate

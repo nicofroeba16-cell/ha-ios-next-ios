@@ -8,6 +8,7 @@ The hosted workflow performs this automatically. For a local Mac:
 
 ```bash
 brew install xcodegen
+bash Scripts/prepare_wireguard_dependency.sh
 xcodegen generate
 ```
 

@@ -32,6 +32,7 @@ This repository has received an internal pre-audit review only. Approval require
 - `Sources/Core/WireGuardTunnelController.swift`
 - `Sources/Features/WireGuardView.swift`
 - `WireGuard/`
+- `Scripts/prepare_wireguard_dependency.sh`
 - app and extension entitlements
 
 ## Explicit security claims to verify

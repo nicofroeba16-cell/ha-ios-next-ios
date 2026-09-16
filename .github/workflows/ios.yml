@@ -36,6 +36,8 @@ jobs:
         run: bash Scripts/validate_without_macos.sh
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Prepare pinned WireGuard source
+        run: bash Scripts/prepare_wireguard_dependency.sh
       - name: Generate project
         run: |
           set -euo pipefail
@@ -44,10 +46,11 @@ jobs:
       - name: Verify pinned WireGuard source
         run: |
           set -euo pipefail
-          checkout="$(find ~/Library/Developer/Xcode/DerivedData -path '*/SourcePackages/checkouts/wireguard-apple' -type d -print -quit)"
-          test -n "$checkout"
+          checkout="$PWD/.build-dependencies/wireguard-apple"
           test "$(git -C "$checkout" rev-parse HEAD)" = "2fec12a6e1f6e3460b6ee483aa00ad29cddadab1"
-          git -C "$checkout" diff --quiet
+          test "$(git -C "$checkout" status --short)" = " M Package.swift"
+          test "$(git -C "$checkout" diff --name-only)" = "Package.swift"
+          git -C "$checkout" diff --check
       - name: Build and test on iOS 27
         run: |
           set -o pipefail

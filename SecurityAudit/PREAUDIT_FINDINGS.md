@@ -44,4 +44,4 @@ User tokens are process environment configuration and rotate on service restart.
 
 ### PA-10 — WireGuardKit source freshness — Medium
 
-The official Apple source tag currently integrated is `1.0.16-27` at the exact project revision `2fec12a6e1f6e3460b6ee483aa00ad29cddadab1`. The Xcode target builds its required `wireguard-go` bridge and CI verifies the checkout commit before compilation. The external reviewer must still assess source freshness, upstream security updates and the generated dependency resolution evidence before release.
+The official Apple source tag currently integrated is `1.0.16-27` at the exact project revision `2fec12a6e1f6e3460b6ee483aa00ad29cddadab1`. Its manifest declares PackageDescription 5.3 while using platform constants introduced in 5.5. `Scripts/prepare_wireguard_dependency.sh` verifies the commit and permits exactly one compatibility change: `swift-tools-version:5.3` to `5.5`. CI rejects every other source difference, then builds the required `wireguard-go` bridge. The external reviewer must still assess source freshness and upstream security updates before release.

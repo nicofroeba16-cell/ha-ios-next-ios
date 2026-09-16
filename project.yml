@@ -3,8 +3,7 @@ options:
   minimumXcodeGenVersion: 2.38.0
 packages:
   WireGuardKit:
-    url: https://git.zx2c4.com/wireguard-apple
-    revision: 2fec12a6e1f6e3460b6ee483aa00ad29cddadab1
+    path: .build-dependencies/wireguard-apple
 settings:
   base:
     SWIFT_VERSION: 5.0
@@ -48,7 +47,7 @@ targets:
       toolPath: /usr/bin/make
       arguments: "$(ACTION) GOOS_iphonesimulator=ios"
       passSettings: true
-      workingDirectory: "${BUILD_DIR%Build/*}SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo"
+      workingDirectory: "$(PROJECT_DIR)/.build-dependencies/wireguard-apple/Sources/WireGuardKitGo"
     settings:
       base:
         SDKROOT: iphoneos
