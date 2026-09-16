@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class IOSNextUITests: XCTestCase {
     private var app: XCUIApplication!
