@@ -58,7 +58,7 @@ private struct EntityHero: View {
                 .multilineTextAlignment(.center)
             Text(entity.stateDisplayName)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(entity.isAvailable ? .secondary : .red)
+                .foregroundStyle(entity.isAvailable ? Color.secondary : Color.red)
         }
         .frame(maxWidth: .infinity)
         .padding(24)

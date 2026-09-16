@@ -109,7 +109,7 @@ final class InMemoryVoiceRecorder {
 
     private func microphonePermission() async -> Bool {
         await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { allowed in
+            AVAudioApplication.requestRecordPermission { allowed in
                 continuation.resume(returning: allowed)
             }
         }

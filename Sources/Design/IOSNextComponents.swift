@@ -203,7 +203,7 @@ struct EntityRow: View {
 
     private var iconTint: Color {
         guard entity.isAvailable else { return Color.secondary }
-        switch entity.domain {
+        return switch entity.domain {
         case "light": entity.isOn ? Color.yellow : Color.secondary
         case "media_player": Color.purple
         case "scene": Color.indigo
