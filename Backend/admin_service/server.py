@@ -178,6 +178,15 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             except ValueError:
                 limit = 50
             self._json(HTTPStatus.OK, self.server.store.audit_events(limit=limit))
+        elif route.path == "/v1/admin/projects":
+            self._json(HTTPStatus.OK, self.server.store.project_routes())
+        elif route.path == "/v1/admin/dispatches":
+            query = parse_qs(route.query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except ValueError:
+                limit = 100
+            self._json(HTTPStatus.OK, self.server.store.project_dispatches(limit=limit))
         elif route.path == "/v1/admin/tickets":
             query = parse_qs(route.query)
             try:
@@ -342,11 +351,25 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                 )
                 self._json(HTTPStatus.OK, result)
                 return
+            if suffix.endswith("/approve"):
+                ticket_id = suffix.removesuffix("/approve")
+                result = self.server.store.approve_support_ticket(
+                    ticket_id,
+                    payload.get("project_id"),
+                    self.server.store.identity.subject,
+                )
+                self._json(HTTPStatus.CREATED, result)
+                return
             self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
         except (ValueError, json.JSONDecodeError):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_payload"})
         except KeyError:
             self._json(HTTPStatus.NOT_FOUND, {"error": "ticket_not_found"})
+        except RuntimeError as error:
+            if str(error) == "ticket_already_dispatched":
+                self._json(HTTPStatus.CONFLICT, {"error": "ticket_already_dispatched"})
+            else:
+                raise
 
     def _read_json(self) -> dict[str, Any]:
         try:
@@ -368,6 +391,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         authorization = self.headers.get("Authorization", "")
         supplied = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
         if not expected_token or not supplied or not hmac.compare_digest(supplied, expected_token):
+            self.close_connection = True
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
             return False
         return True
@@ -384,6 +408,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             if supplied and hmac.compare_digest(supplied, expected_token):
                 principal = user_id
         if principal is None:
+            self.close_connection = True
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
         return principal
 

@@ -39,6 +39,58 @@ class OwnerIdentity:
         }
 
 
+PROJECT_ROUTES: dict[str, dict[str, Any]] = {
+    "ios-app": {
+        "id": "ios-app",
+        "title": "iOS App",
+        "repository": "nicofroeba16-cell/ha-ios-next-ios",
+        "keywords": ("ios next", "ios", "iphone", "ipad", "chat", "owner", "wireguard", "vpn"),
+    },
+    "fire-tv": {
+        "id": "fire-tv",
+        "title": "Fire TV Companion",
+        "repository": "nicofroeba16-cell/AmazonTV-App",
+        "keywords": ("fire tv", "firetv", "fernseher", "tv", "media player", "mediaplayer"),
+    },
+    "ha-dashboard": {
+        "id": "ha-dashboard",
+        "title": "Home Assistant Dashboard",
+        "repository": "nicofroeba16-cell/HA-CONFIG",
+        "keywords": ("dashboard", "lovelace", "karte", "card", "gradient", "raum", "zimmer", "licht"),
+    },
+    "intelligence-suite": {
+        "id": "intelligence-suite",
+        "title": "Intelligence Suite",
+        "repository": "nicofroeba16-cell/Intelligence-Suite-",
+        "keywords": ("intelligence", "entity intelligence", "audit", "aggregator", "system health"),
+    },
+    "file-bridge": {
+        "id": "file-bridge",
+        "title": "File Bridge",
+        "repository": "nicofroeba16-cell/File-Bridge-mcp",
+        "keywords": ("bridge", "file bridge", "datei", "sync", "queue", "poller"),
+    },
+    "ha-simulation": {
+        "id": "ha-simulation",
+        "title": "HA Simulation",
+        "repository": None,
+        "keywords": ("simulation", "simulator", "fake ha", "testserver", "test server"),
+    },
+    "global-health": {
+        "id": "global-health",
+        "title": "Global Project Health",
+        "repository": None,
+        "keywords": ("global health", "duplikat", "veraltet", "reconciliation", "health audit"),
+    },
+    "general": {
+        "id": "general",
+        "title": "General / Triage",
+        "repository": None,
+        "keywords": (),
+    },
+}
+
+
 class AdminStore:
     ALLOWED_ACTIONS = frozenset(
         {
@@ -66,7 +118,8 @@ class AdminStore:
         self.cache_dir = self.state_dir / "cache"
         self.backup_dir = self.state_dir / "backups"
         self.export_dir = self.state_dir / "audit-exports"
-        for directory in (self.cache_dir, self.backup_dir, self.export_dir):
+        self.project_queue_dir = self.state_dir / "project-queue"
+        for directory in (self.cache_dir, self.backup_dir, self.export_dir, self.project_queue_dir):
             directory.mkdir(parents=True, exist_ok=True)
 
         self.identity = identity
@@ -273,6 +326,17 @@ class AdminStore:
             ).fetchall()
         payload = dict(row)
         payload["messages"] = [dict(message) for message in messages]
+        with self._lock:
+            dispatch = self._database.execute(
+                """
+                SELECT project_id, state FROM project_dispatches
+                WHERE ticket_id = ?
+                """,
+                (ticket_id,),
+            ).fetchone()
+        payload["suggested_project_id"] = self._suggest_project_from_messages(payload["messages"])
+        payload["dispatched_project_id"] = dispatch["project_id"] if dispatch else None
+        payload["dispatch_state"] = dispatch["state"] if dispatch else None
         return payload
 
     def add_support_ticket_message(
@@ -323,7 +387,7 @@ class AdminStore:
     def update_support_ticket_status(self, ticket_id: str, status: str, actor: str) -> dict[str, Any]:
         ticket_id = self._validate_identifier(ticket_id, "ticket_id", max_length=80)
         actor = self._validate_identifier(actor, "actor")
-        if status not in {"open", "in_progress", "resolved"}:
+        if status not in {"open", "in_progress", "approved", "resolved"}:
             raise ValueError("invalid ticket status")
         updated_at = utc_now()
         with self._lock:
@@ -347,8 +411,156 @@ class AdminStore:
                 """,
                 (ticket["id"],),
             ).fetchone()
+            dispatch = self._database.execute(
+                """
+                SELECT project_id, state FROM project_dispatches
+                WHERE ticket_id = ?
+                """,
+                (ticket["id"],),
+            ).fetchone()
         ticket["last_message"] = row["body"] if row else ""
+        with self._lock:
+            messages = self._database.execute(
+                """
+                SELECT body FROM support_ticket_messages
+                WHERE ticket_id = ? ORDER BY rowid ASC
+                """,
+                (ticket["id"],),
+            ).fetchall()
+        ticket["suggested_project_id"] = self._suggest_project_from_messages(
+            [dict(message) for message in messages]
+        )
+        ticket["dispatched_project_id"] = dispatch["project_id"] if dispatch else None
+        ticket["dispatch_state"] = dispatch["state"] if dispatch else None
         return ticket
+
+    def project_routes(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": route["id"],
+                "title": route["title"],
+                "repository": route["repository"],
+            }
+            for route in PROJECT_ROUTES.values()
+        ]
+
+    def suggest_project(self, ticket_id: str) -> str:
+        return self.support_ticket(ticket_id)["suggested_project_id"]
+
+    @staticmethod
+    def _suggest_project_from_messages(messages: list[dict[str, Any]]) -> str:
+        text = " ".join(str(message.get("body", "")) for message in messages).lower()
+        best_project = "general"
+        best_score = 0
+        for project_id, route in PROJECT_ROUTES.items():
+            if project_id == "general":
+                continue
+            score = sum(1 for keyword in route["keywords"] if keyword in text)
+            if score > best_score:
+                best_project = project_id
+                best_score = score
+        return best_project
+
+    def approve_support_ticket(
+        self,
+        ticket_id: str,
+        project_id: str,
+        actor: str,
+    ) -> dict[str, Any]:
+        ticket_id = self._validate_identifier(ticket_id, "ticket_id", max_length=80)
+        actor = self._validate_identifier(actor, "actor")
+        if project_id not in PROJECT_ROUTES:
+            raise ValueError("invalid project_id")
+
+        with self._lock:
+            existing = self._database.execute(
+                """
+                SELECT id, ticket_id, project_id, state, approved_by, approved_at, queue_file
+                FROM project_dispatches WHERE ticket_id = ?
+                """,
+                (ticket_id,),
+            ).fetchone()
+            if existing is not None:
+                if existing["project_id"] != project_id:
+                    raise RuntimeError("ticket_already_dispatched")
+                return dict(existing)
+
+            ticket = self.support_ticket(ticket_id)
+            dispatch_id = f"dispatch-{uuid.uuid4()}"
+            approved_at = utc_now()
+            route = PROJECT_ROUTES[project_id]
+            queue_dir = self.project_queue_dir / project_id
+            queue_dir.mkdir(parents=True, exist_ok=True)
+            queue_path = queue_dir / f"{dispatch_id}.json"
+            payload = {
+                "schema_version": 1,
+                "dispatch_id": dispatch_id,
+                "ticket_id": ticket_id,
+                "project": {
+                    "id": project_id,
+                    "title": route["title"],
+                    "repository": route["repository"],
+                },
+                "approved_by": actor,
+                "approved_at": approved_at,
+                "ticket": ticket,
+                "instruction": "Bearbeite das freigegebene Owner-Ticket im Zielprojekt. Änderungen müssen den Regeln des Zielprojekts folgen.",
+            }
+            temporary_path = queue_path.with_suffix(".json.tmp")
+            try:
+                self._database.execute(
+                    """
+                    INSERT INTO project_dispatches(
+                        id, ticket_id, project_id, state, approved_by, approved_at, queue_file
+                    ) VALUES (?, ?, ?, 'queued', ?, ?, ?)
+                    """,
+                    (
+                        dispatch_id,
+                        ticket_id,
+                        project_id,
+                        actor,
+                        approved_at,
+                        str(queue_path),
+                    ),
+                )
+                self._database.execute(
+                    "UPDATE support_tickets SET status = 'approved', updated_at = ? WHERE id = ?",
+                    (approved_at, ticket_id),
+                )
+                temporary_path.write_text(
+                    json.dumps(payload, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                temporary_path.replace(queue_path)
+                self._database.commit()
+            except Exception:
+                self._database.rollback()
+                temporary_path.unlink(missing_ok=True)
+                queue_path.unlink(missing_ok=True)
+                raise
+
+        self._write_audit(actor, f"ticket-approve-{project_id}", "success")
+        return {
+            "id": dispatch_id,
+            "ticket_id": ticket_id,
+            "project_id": project_id,
+            "state": "queued",
+            "approved_by": actor,
+            "approved_at": approved_at,
+            "queue_file": str(queue_path),
+        }
+
+    def project_dispatches(self, limit: int = 100) -> list[dict[str, Any]]:
+        safe_limit = min(max(limit, 1), 200)
+        with self._lock:
+            rows = self._database.execute(
+                """
+                SELECT id, ticket_id, project_id, state, approved_by, approved_at, queue_file
+                FROM project_dispatches ORDER BY rowid DESC LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     @staticmethod
     def _validate_ticket_message(value: Any) -> str:
@@ -446,6 +658,18 @@ class AdminStore:
                     ON support_tickets(updated_at DESC);
                 CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx
                     ON support_ticket_messages(ticket_id, created_at);
+                CREATE TABLE IF NOT EXISTS project_dispatches (
+                    id TEXT PRIMARY KEY,
+                    ticket_id TEXT NOT NULL UNIQUE,
+                    project_id TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    approved_by TEXT NOT NULL,
+                    approved_at TEXT NOT NULL,
+                    queue_file TEXT NOT NULL,
+                    FOREIGN KEY(ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS project_dispatches_project_idx
+                    ON project_dispatches(project_id, approved_at);
                 DROP TABLE IF EXISTS chat_messages;
                 """
             )

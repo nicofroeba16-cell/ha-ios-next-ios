@@ -30,9 +30,18 @@ struct OwnerTicketInboxView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                            Text(ticket.updatedAt)
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.tertiary)
+                            HStack(spacing: 6) {
+                                Text(ticket.updatedAt)
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(.tertiary)
+                                if let projectID = ticket.dispatchedProjectID ?? ticket.suggestedProjectID {
+                                    Text("·")
+                                        .foregroundStyle(.tertiary)
+                                    Text(projectTitle(projectID))
+                                        .font(.caption2.weight(.medium))
+                                        .foregroundStyle(ticket.dispatchedProjectID == nil ? .secondary : .green)
+                                }
+                            }
                         }
                         .padding(.vertical, 4)
                     }
@@ -47,6 +56,7 @@ struct OwnerTicketInboxView: View {
         switch status {
         case "open": "Neu"
         case "in_progress": "In Arbeit"
+        case "approved": "Freigegeben"
         case "resolved": "Erledigt"
         default: status
         }
@@ -54,10 +64,14 @@ struct OwnerTicketInboxView: View {
 
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "resolved": .green
+        case "approved", "resolved": .green
         case "in_progress": .orange
         default: .blue
         }
+    }
+
+    private func projectTitle(_ id: String) -> String {
+        model.projectRoutes.first(where: { $0.id == id })?.title ?? id
     }
 }
 
@@ -66,6 +80,8 @@ private struct OwnerTicketConversationView: View {
     let ticketID: String
     @State private var draft = ""
     @State private var isSending = false
+    @State private var selectedProjectID = ""
+    @State private var isConfirmingApproval = false
 
     private var ticket: SupportTicket? {
         model.ticketDetails[ticketID]
@@ -74,6 +90,7 @@ private struct OwnerTicketConversationView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            routingPanel
             conversation
             composer
         }
@@ -89,8 +106,91 @@ private struct OwnerTicketConversationView: View {
                 }
             }
         }
-        .task { await model.loadTicket(ticketID) }
-        .refreshable { await model.loadTicket(ticketID) }
+        .task {
+            await model.loadTicket(ticketID)
+            selectDefaultProjectIfNeeded()
+        }
+        .refreshable {
+            await model.loadTicket(ticketID)
+            selectDefaultProjectIfNeeded()
+        }
+        .confirmationDialog(
+            "Ticket freigeben und an Projekt senden?",
+            isPresented: $isConfirmingApproval,
+            titleVisibility: .visible
+        ) {
+            Button("Freigeben & senden") {
+                Task {
+                    if await model.approveTicket(ticketID, projectID: selectedProjectID) {
+                        await model.loadTicket(ticketID)
+                    }
+                }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Erst nach deiner Freigabe wird ein Work Order für das ausgewählte Projekt erzeugt.")
+        }
+    }
+
+    @ViewBuilder
+    private var routingPanel: some View {
+        if let dispatchedProjectID = ticket?.dispatchedProjectID {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Freigegeben")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Gesendet an \(projectTitle(dispatchedProjectID))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(ticket?.dispatchState ?? "queued")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .background(.green.opacity(0.10))
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("Zielprojekt", systemImage: "folder.badge.gearshape")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    if let suggested = ticket?.suggestedProjectID {
+                        Text("Vorschlag: \(projectTitle(suggested))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Picker("Projekt", selection: $selectedProjectID) {
+                    ForEach(model.projectRoutes) { route in
+                        Text(route.title).tag(route.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Button("Freigeben & an Projekt senden", systemImage: "paperplane.fill") {
+                    isConfirmingApproval = true
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedProjectID.isEmpty)
+            }
+            .padding(12)
+            .background(.thinMaterial)
+        }
+    }
+
+    private func selectDefaultProjectIfNeeded() {
+        guard selectedProjectID.isEmpty else { return }
+        selectedProjectID = ticket?.dispatchedProjectID
+            ?? ticket?.suggestedProjectID
+            ?? model.projectRoutes.first?.id
+            ?? "general"
+    }
+
+    private func projectTitle(_ id: String) -> String {
+        model.projectRoutes.first(where: { $0.id == id })?.title ?? id
     }
 
     @ViewBuilder

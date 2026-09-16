@@ -151,6 +151,23 @@ actor AdminControlClient {
         try await request(path: "v1/admin/tickets?limit=100", method: "GET", configuration: configuration)
     }
 
+    func projectRoutes(configuration: AdminControlConfiguration) async throws -> [ProjectRoute] {
+        try await request(path: "v1/admin/projects", method: "GET", configuration: configuration)
+    }
+
+    func approveTicket(
+        ticketID: String,
+        projectID: String,
+        configuration: AdminControlConfiguration
+    ) async throws -> ProjectDispatch {
+        try await request(
+            path: "v1/admin/tickets/\(ticketID)/approve",
+            method: "POST",
+            body: SupportTicketApprovalRequest(projectID: projectID),
+            configuration: configuration
+        )
+    }
+
     func ticket(id: String, configuration: AdminControlConfiguration) async throws -> SupportTicket {
         try await request(path: "v1/admin/tickets/\(id)", method: "GET", configuration: configuration)
     }
@@ -247,6 +264,8 @@ final class AdminControlModel {
     var auditEvents: [AdminAuditEvent] = []
     var supportTickets: [SupportTicket] = []
     var ticketDetails: [String: SupportTicket] = [:]
+    var projectRoutes: [ProjectRoute] = []
+    var lastDispatch: ProjectDispatch?
     var isLoading = false
     var lastReceipt: AdminActionReceipt?
     var lastError: String?
@@ -292,6 +311,8 @@ final class AdminControlModel {
         auditEvents = []
         supportTickets = []
         ticketDetails = [:]
+        projectRoutes = []
+        lastDispatch = nil
         state = configuration == nil ? .notConfigured : .locked
     }
 
@@ -304,9 +325,11 @@ final class AdminControlModel {
             async let status = client.status(configuration: configuration)
             async let audit = client.audit(configuration: configuration)
             async let tickets = client.tickets(configuration: configuration)
+            async let routes = client.projectRoutes(configuration: configuration)
             backendStatus = try await status
             auditEvents = try await audit
             supportTickets = try await tickets
+            projectRoutes = try await routes
         } catch {
             lastError = error.localizedDescription
         }
@@ -337,6 +360,29 @@ final class AdminControlModel {
                 message: normalized,
                 configuration: configuration
             )
+            supportTickets = try await client.tickets(configuration: configuration)
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func approveTicket(_ id: String, projectID: String) async -> Bool {
+        guard case .unlocked = state, let configuration else { return false }
+        guard projectRoutes.contains(where: { $0.id == projectID }) else {
+            lastError = "Ungültiges Zielprojekt."
+            return false
+        }
+        do {
+            lastError = nil
+            lastDispatch = try await client.approveTicket(
+                ticketID: id,
+                projectID: projectID,
+                configuration: configuration
+            )
+            ticketDetails[id] = try await client.ticket(id: id, configuration: configuration)
             supportTickets = try await client.tickets(configuration: configuration)
             return true
         } catch {
@@ -384,6 +430,8 @@ final class AdminControlModel {
         auditEvents = []
         supportTickets = []
         ticketDetails = [:]
+        projectRoutes = []
+        lastDispatch = nil
         lastError = nil
         state = .notConfigured
     }

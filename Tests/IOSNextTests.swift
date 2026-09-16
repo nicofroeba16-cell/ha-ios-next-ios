@@ -64,12 +64,14 @@ final class IOSNextTests: XCTestCase {
 
     func testSupportTicketDecodesSummaryAndConversation() throws {
         let summaryData = Data(
-            #"{"id":"ticket-1","requester_user_id":"mika","status":"open","created_at":"2026-09-16T18:00:00Z","updated_at":"2026-09-16T18:01:00Z","last_message":"Bitte prüfen"}"#.utf8
+            #"{"id":"ticket-1","requester_user_id":"mika","status":"open","created_at":"2026-09-16T18:00:00Z","updated_at":"2026-09-16T18:01:00Z","last_message":"Bitte prüfen","suggested_project_id":"fire-tv","dispatched_project_id":null,"dispatch_state":null}"#.utf8
         )
         let summary = try JSONDecoder().decode(SupportTicket.self, from: summaryData)
         XCTAssertEqual(summary.requesterUserID, "mika")
         XCTAssertEqual(summary.lastMessage, "Bitte prüfen")
         XCTAssertNil(summary.messages)
+        XCTAssertEqual(summary.suggestedProjectID, "fire-tv")
+        XCTAssertNil(summary.dispatchedProjectID)
 
         let detailData = Data(
             #"{"id":"ticket-1","requester_user_id":"mika","status":"in_progress","created_at":"2026-09-16T18:00:00Z","updated_at":"2026-09-16T18:02:00Z","messages":[{"id":"message-1","author_user_id":"nico","author_role":"owner","body":"Übernommen","created_at":"2026-09-16T18:02:00Z"}]}"#.utf8
@@ -78,6 +80,23 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(detail.status, "in_progress")
         XCTAssertEqual(detail.messages?.first?.authorRole, .owner)
         XCTAssertEqual(detail.messages?.first?.body, "Übernommen")
+    }
+
+    func testProjectDispatchDecodesApprovalReceipt() throws {
+        let routeData = Data(
+            #"{"id":"fire-tv","title":"Fire TV Companion","repository":"nicofroeba16-cell/AmazonTV-App"}"#.utf8
+        )
+        let route = try JSONDecoder().decode(ProjectRoute.self, from: routeData)
+        XCTAssertEqual(route.id, "fire-tv")
+        XCTAssertEqual(route.repository, "nicofroeba16-cell/AmazonTV-App")
+
+        let dispatchData = Data(
+            #"{"id":"dispatch-1","ticket_id":"ticket-1","project_id":"fire-tv","state":"queued","approved_by":"nico","approved_at":"2026-09-16T19:00:00Z","queue_file":"ignored"}"#.utf8
+        )
+        let dispatch = try JSONDecoder().decode(ProjectDispatch.self, from: dispatchData)
+        XCTAssertEqual(dispatch.ticketID, "ticket-1")
+        XCTAssertEqual(dispatch.projectID, "fire-tv")
+        XCTAssertEqual(dispatch.state, "queued")
     }
 
     func testTimoProfileContainsOnlyVerifiedFavorites() {

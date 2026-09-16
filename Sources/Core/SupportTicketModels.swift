@@ -39,6 +39,9 @@ struct SupportTicket: Codable, Identifiable, Equatable, Sendable {
     let updatedAt: String
     let lastMessage: String?
     let messages: [SupportTicketMessage]?
+    let suggestedProjectID: String?
+    let dispatchedProjectID: String?
+    let dispatchState: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -48,6 +51,41 @@ struct SupportTicket: Codable, Identifiable, Equatable, Sendable {
         case updatedAt = "updated_at"
         case lastMessage = "last_message"
         case messages
+        case suggestedProjectID = "suggested_project_id"
+        case dispatchedProjectID = "dispatched_project_id"
+        case dispatchState = "dispatch_state"
+    }
+}
+
+struct ProjectRoute: Codable, Identifiable, Equatable, Sendable {
+    let id: String
+    let title: String
+    let repository: String?
+}
+
+struct ProjectDispatch: Codable, Identifiable, Equatable, Sendable {
+    let id: String
+    let ticketID: String
+    let projectID: String
+    let state: String
+    let approvedBy: String
+    let approvedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case ticketID = "ticket_id"
+        case projectID = "project_id"
+        case state
+        case approvedBy = "approved_by"
+        case approvedAt = "approved_at"
+    }
+}
+
+struct SupportTicketApprovalRequest: Codable, Sendable {
+    let projectID: String
+
+    enum CodingKeys: String, CodingKey {
+        case projectID = "project_id"
     }
 }
 

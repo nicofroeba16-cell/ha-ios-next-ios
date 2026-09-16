@@ -136,6 +136,37 @@ class AdminStoreTests(unittest.TestCase):
                 ticket["id"], "juli", "member", "Fremde Nachricht"
             )
 
+    def test_ticket_is_not_dispatched_before_owner_approval(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Fire TV Medienkarte erweitern")
+        self.assertEqual(self.store.project_dispatches(), [])
+        self.assertEqual(ticket["status"], "open")
+
+    def test_project_suggestion_uses_ticket_content(self) -> None:
+        fire_ticket = self.store.create_support_ticket("mika", "Fire TV Media Player reagiert nicht")
+        dashboard_ticket = self.store.create_support_ticket("juli", "Dashboard Karte im Zimmer ist falsch")
+        self.assertEqual(self.store.suggest_project(fire_ticket["id"]), "fire-tv")
+        self.assertEqual(self.store.suggest_project(dashboard_ticket["id"]), "ha-dashboard")
+
+    def test_owner_approval_creates_project_work_order_once(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Fire TV Medienkarte erweitern")
+        dispatch = self.store.approve_support_ticket(ticket["id"], "fire-tv", "nico")
+        self.assertEqual(dispatch["project_id"], "fire-tv")
+        self.assertEqual(dispatch["state"], "queued")
+
+        queue_file = Path(dispatch["queue_file"])
+        self.assertTrue(queue_file.is_file())
+        payload = json.loads(queue_file.read_text(encoding="utf-8"))
+        self.assertEqual(payload["ticket_id"], ticket["id"])
+        self.assertEqual(payload["project"]["id"], "fire-tv")
+        self.assertEqual(payload["approved_by"], "nico")
+
+        refreshed = self.store.support_ticket(ticket["id"])
+        self.assertEqual(refreshed["status"], "approved")
+        same = self.store.approve_support_ticket(ticket["id"], "fire-tv", "nico")
+        self.assertEqual(same["id"], dispatch["id"])
+        with self.assertRaises(RuntimeError):
+            self.store.approve_support_ticket(ticket["id"], "ios-app", "nico")
+
 
 class EphemeralChatRelayTests(unittest.TestCase):
     def envelope(self, message_id: str = "message-1") -> dict:
@@ -392,6 +423,54 @@ class AdminHTTPServerTests(unittest.TestCase):
             token="c" * 32,
         )
         self.assertEqual(status, 403)
+
+    def test_owner_approval_routes_ticket_to_project_queue(self) -> None:
+        status, body = self.chat_request(
+            "POST",
+            "/v1/chat/tickets",
+            {"message": "Fire TV Karte bitte korrigieren"},
+            token="m" * 32,
+        )
+        self.assertEqual(status, 201)
+        ticket_id = json.loads(body)["id"]
+
+        status, body = self.request("GET", "/v1/admin/tickets")
+        self.assertEqual(status, 200)
+        tickets = json.loads(body)
+        matching = next(ticket for ticket in tickets if ticket["id"] == ticket_id)
+        self.assertEqual(matching["suggested_project_id"], "fire-tv")
+        self.assertIsNone(matching["dispatched_project_id"])
+
+        status, body = self.request(
+            "POST",
+            f"/v1/admin/tickets/{ticket_id}/approve",
+            payload={"project_id": "fire-tv"},
+        )
+        self.assertEqual(status, 201)
+        dispatch = json.loads(body)
+        self.assertEqual(dispatch["project_id"], "fire-tv")
+        self.assertEqual(dispatch["state"], "queued")
+
+        status, body = self.request("GET", "/v1/admin/dispatches")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)[0]["ticket_id"], ticket_id)
+
+    def test_chat_token_cannot_approve_ticket(self) -> None:
+        status, body = self.chat_request(
+            "POST",
+            "/v1/chat/tickets",
+            {"message": "Bitte iOS App ändern"},
+            token="m" * 32,
+        )
+        self.assertEqual(status, 201)
+        ticket_id = json.loads(body)["id"]
+        status, _ = self.chat_request(
+            "POST",
+            f"/v1/admin/tickets/{ticket_id}/approve",
+            {"project_id": "ios-app"},
+            token="m" * 32,
+        )
+        self.assertEqual(status, 401)
 
 
 if __name__ == "__main__":
