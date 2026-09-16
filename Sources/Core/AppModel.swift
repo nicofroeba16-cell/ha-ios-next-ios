@@ -334,7 +334,7 @@ final class AppModel {
         }
     }
 
-    static func reconnectDelaySeconds(attempt: Int, jitterFraction: Double) -> Double {
+    nonisolated static func reconnectDelaySeconds(attempt: Int, jitterFraction: Double) -> Double {
         let base = min(pow(2.0, Double(max(attempt, 1) - 1)), 30)
         let boundedJitter = min(max(jitterFraction, -0.2), 0.2)
         return max(0.25, base * (1 + boundedJitter))
