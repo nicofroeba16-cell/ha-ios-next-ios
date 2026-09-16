@@ -6,12 +6,19 @@ SCHEME="IOSNext"
 IPHONE_NAME="iPhone 17 Pro"
 OUT_DIR="UIAcceptance"
 
-if [ -n "${XCTESTRUN_PATH:-}" ] && [ -f "$XCTESTRUN_PATH" ]; then
-  test_run_args=(-xctestrun "$XCTESTRUN_PATH")
-  test_run_source="xctestrun:$XCTESTRUN_PATH"
-else
-  test_run_args=(-project "$PROJECT" -scheme "$SCHEME")
-  test_run_source="project-scheme-fallback"
+: "${DERIVED_DATA_PATH:?DERIVED_DATA_PATH must point to this run's isolated DerivedData}"
+test -d "$DERIVED_DATA_PATH"
+test_run_args=(-project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DERIVED_DATA_PATH")
+test_run_source="derived-data:$DERIVED_DATA_PATH"
+
+if [ -n "${XCTESTRUN_PATH:-}" ]; then
+  case "$XCTESTRUN_PATH" in
+    "$DERIVED_DATA_PATH"/*) ;;
+    *)
+      echo "XCTESTRUN_PATH escaped current run DerivedData: $XCTESTRUN_PATH" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 rm -rf "$OUT_DIR" UITestResults-iPhone.xcresult UITestResults-iPad.xcresult
