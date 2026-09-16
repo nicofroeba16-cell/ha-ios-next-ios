@@ -11,12 +11,18 @@ test -n "$device_id"
 xcrun simctl boot "$device_id" 2>/dev/null || true
 xcrun simctl bootstatus "$device_id" -b
 
-if [ -n "${XCTESTRUN_PATH:-}" ] && [ -f "$XCTESTRUN_PATH" ]; then
-  products_dir="$(dirname "$XCTESTRUN_PATH")"
-  app_path="$products_dir/Debug-iphonesimulator/IOSNext.app"
-else
-  app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
-fi
+: "${DERIVED_DATA_PATH:?DERIVED_DATA_PATH is required}"
+: "${XCTESTRUN_PATH:?XCTESTRUN_PATH is required}"
+test -f "$XCTESTRUN_PATH"
+case "$XCTESTRUN_PATH" in
+  "$DERIVED_DATA_PATH"/*) ;;
+  *)
+    echo "XCTESTRUN_PATH is outside current-run DerivedData: $XCTESTRUN_PATH" >&2
+    exit 1
+    ;;
+esac
+products_dir="$(dirname "$XCTESTRUN_PATH")"
+app_path="$products_dir/Debug-iphonesimulator/IOSNext.app"
 test -d "$app_path"
 
 rm -rf "$OUT_DIR"
