@@ -12,10 +12,9 @@ enum VisualAcceptanceRun {
 
         let raw = String(argument.dropFirst(prefix.count))
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let sanitized = raw.unicodeScalars
-            .filter { allowed.contains($0) }
-            .map(String.init)
-            .joined()
+        let sanitized = String(raw.filter { character in
+            character.unicodeScalars.allSatisfy { allowed.contains($0) }
+        })
         return sanitized.isEmpty ? "legacy" : String(sanitized.prefix(96))
     }()
 }
