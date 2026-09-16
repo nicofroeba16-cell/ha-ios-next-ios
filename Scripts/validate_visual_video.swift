@@ -9,6 +9,9 @@ enum ValidationMode: String {
 }
 
 struct FrameStats {
+    let meanR: Double
+    let meanG: Double
+    let meanB: Double
     let mean: Double
     let deviation: Double
     let blackRatio: Double
@@ -57,6 +60,9 @@ func frameStats(_ image: CGImage) -> FrameStats? {
     context.draw(image, in: CGRect(x: 0, y: 0, width: sampleWidth, height: sampleHeight))
 
     var count = 0
+    var sumR = 0.0
+    var sumG = 0.0
+    var sumB = 0.0
     var sum = 0.0
     var sumSquares = 0.0
     var black = 0
@@ -71,6 +77,9 @@ func frameStats(_ image: CGImage) -> FrameStats? {
         let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
 
         count += 1
+        sumR += r
+        sumG += g
+        sumB += b
         sum += luma
         sumSquares += luma * luma
         minLuma = min(minLuma, luma)
@@ -85,12 +94,41 @@ func frameStats(_ image: CGImage) -> FrameStats? {
     let variance = max(0, sumSquares / Double(count) - mean * mean)
 
     return FrameStats(
+        meanR: sumR / Double(count),
+        meanG: sumG / Double(count),
+        meanB: sumB / Double(count),
         mean: mean,
         deviation: sqrt(variance),
         blackRatio: Double(black) / Double(count),
         whiteRatio: Double(white) / Double(count),
         dynamicRange: maxLuma - minLuma
     )
+}
+
+func darkLaunchColor() -> (Double, Double, Double)? {
+    let url = URL(fileURLWithPath: "Assets.xcassets/LaunchBackground.colorset/Contents.json")
+    guard let data = try? Data(contentsOf: url),
+          let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let colors = root["colors"] as? [[String: Any]] else {
+        return nil
+    }
+
+    for entry in colors {
+        guard let appearances = entry["appearances"] as? [[String: String]],
+              appearances.contains(where: {
+                  $0["appearance"] == "luminosity" && $0["value"] == "dark"
+              }),
+              let color = entry["color"] as? [String: Any],
+              let components = color["components"] as? [String: String],
+              let red = components["red"].flatMap(Double.init),
+              let green = components["green"].flatMap(Double.init),
+              let blue = components["blue"].flatMap(Double.init) else {
+            continue
+        }
+        return (red, green, blue)
+    }
+
+    return nil
 }
 
 guard CommandLine.arguments.count >= 3,
@@ -119,12 +157,18 @@ guard duration >= minimumDuration else {
     exit(4)
 }
 
+let expectedLaunchColor = mode == .cold ? darkLaunchColor() : nil
+if mode == .cold, expectedLaunchColor == nil {
+    fputs("video-validation: unable to load dark LaunchBackground asset color\n", stderr)
+    exit(5)
+}
+
 let generator = AVAssetImageGenerator(asset: asset)
 generator.appliesPreferredTrackTransform = true
 generator.requestedTimeToleranceBefore = CMTime(seconds: 0.025, preferredTimescale: 600)
 generator.requestedTimeToleranceAfter = CMTime(seconds: 0.025, preferredTimescale: 600)
 
-let sampleInterval = mode == .cold ? 0.05 : 0.20
+let sampleInterval = mode == .cold ? 0.033 : 0.20
 let startTime = min(0.05, duration / 4)
 let endTime = max(startTime, duration - 0.05)
 
@@ -140,6 +184,9 @@ var extremeBlankFrames = 0
 var contentRichFrames = 0
 var fingerprints = Set<String>()
 var firstExtremeBlankTime: Double?
+var launchLikeFrames = 0
+var contentFramesAfterLaunch = 0
+var sawLaunchFrame = false
 
 for seconds in sampleTimes {
     let requested = CMTime(seconds: seconds, preferredTimescale: 600)
@@ -158,8 +205,23 @@ for seconds in sampleTimes {
             }
         }
 
+        if mode == .cold, let expectedLaunchColor {
+            let launchDistance = max(
+                abs(stats.meanR - expectedLaunchColor.0),
+                abs(stats.meanG - expectedLaunchColor.1),
+                abs(stats.meanB - expectedLaunchColor.2)
+            )
+            if launchDistance <= 0.06 && stats.deviation <= 0.035 {
+                launchLikeFrames += 1
+                sawLaunchFrame = true
+            }
+        }
+
         if stats.isContentRich {
             contentRichFrames += 1
+            if sawLaunchFrame {
+                contentFramesAfterLaunch += 1
+            }
         }
     } catch {
         fputs("video-validation: frame decode failed at \(String(format: "%.2f", seconds))s: \(error)\n", stderr)
@@ -175,7 +237,8 @@ print(
     "duration=\(String(format: "%.3f", duration)) " +
     "requested=\(sampleTimes.count) decoded=\(decoded) " +
     "blank=\(extremeBlankFrames) rich=\(contentRichFrames) " +
-    "fingerprints=\(fingerprints.count)"
+    "fingerprints=\(fingerprints.count) launch=\(launchLikeFrames) " +
+    "contentAfterLaunch=\(contentFramesAfterLaunch)"
 )
 
 guard decoded >= minimumDecoded else {
@@ -192,6 +255,18 @@ guard extremeBlankFrames == 0 else {
 guard contentRichFrames >= minimumRichFrames else {
     fputs("video-validation: insufficient rendered content variation\n", stderr)
     exit(12)
+}
+
+if mode == .cold {
+    guard launchLikeFrames >= 1 else {
+        fputs("video-validation: dark Launch Screen color was not observed\n", stderr)
+        exit(14)
+    }
+
+    guard contentFramesAfterLaunch >= 1 else {
+        fputs("video-validation: no rendered app content observed after Launch Screen\n", stderr)
+        exit(15)
+    }
 }
 
 guard fingerprints.count >= minimumFingerprints else {
