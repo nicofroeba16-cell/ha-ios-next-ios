@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 enum LiveHACardType: String, CaseIterable {
@@ -16,10 +17,11 @@ enum LiveHACardType: String, CaseIterable {
 }
 
 struct LiveHACardTestModeView: View {
-    private let page: Int
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var page: Int
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
-        page = Self.page(from: arguments)
+        _page = State(initialValue: Self.page(from: arguments))
     }
 
     var body: some View {
@@ -38,6 +40,35 @@ struct LiveHACardTestModeView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .accessibilityIdentifier("live-ha-card-test-mode")
+        .overlay(alignment: .topLeading) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .id("live-ha-card-ready-\(page)-\(appearanceName)")
+                .onAppear {
+                    publishReadyMarker()
+                }
+        }
+        .onOpenURL { url in
+            guard let requestedPage = Self.page(from: url) else { return }
+            page = requestedPage
+        }
+    }
+
+    private var appearanceName: String {
+        colorScheme == .dark ? "dark" : "light"
+    }
+
+    private func publishReadyMarker() {
+        let currentPage = page
+        let currentAppearance = appearanceName
+
+        DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                let marker = FileManager.default.temporaryDirectory
+                    .appending(path: "iosnext-card-ready-\(currentAppearance)-\(currentPage)")
+                try? Data("ready".utf8).write(to: marker, options: .atomic)
+            }
+        }
     }
 
     private var header: some View {
@@ -126,6 +157,17 @@ struct LiveHACardTestModeView: View {
               let value = Int(argument.split(separator: "=").last ?? ""),
               (0...2).contains(value)
         else { return 0 }
+        return value
+    }
+
+    static func page(from url: URL) -> Int? {
+        guard url.scheme == "iosnext",
+              url.host == "ci-card",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let rawValue = components.queryItems?.first(where: { $0.name == "page" })?.value,
+              let value = Int(rawValue),
+              (0...2).contains(value)
+        else { return nil }
         return value
     }
 }

@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "captured_at": "2026-09-16",
+  "source_branch": "codex/ios27-owner-control",
+  "source_commit": "f977078802b3518256543ccada37e343e66024d0",
+  "canonical": {
+    "fast_gate": {
+      "run_id": 35097789422,
+      "run_number": 16,
+      "conclusion": "success",
+      "wall_clock_seconds": 260.6,
+      "portable_job_seconds": 5.7,
+      "build_for_testing_seconds": 63.5,
+      "unit_harness_seconds": 181.1,
+      "unit_suite_seconds": 5,
+      "unit_execution_seconds": 0.55,
+      "observed_pre_test_startup_gap_seconds": 152.7
+    },
+    "full_gate": {
+      "run_id": 35097789404,
+      "run_number": 43,
+      "conclusion": "failure",
+      "wall_clock_to_failure_seconds": 1678.6,
+      "failed_step": "Run real product UI acceptance matrix",
+      "ui_matrix_seconds_to_failure": 1316,
+      "cause": "method-level xcodebuild selectors omitted the test-class component; wrong-state accessibility tests and iPad-only test ran in the standard iPhone shard, followed by a 600-second diagnostics timeout"
+    }
+  },
+  "historical_success_not_canonical": {
+    "run_id": 35094321720,
+    "run_number": 40,
+    "wall_clock_seconds": 914.2,
+    "reason": "predates expanded accessibility/device matrix",
+    "steps_seconds": {
+      "build_for_testing": 52.4,
+      "unit_tests": 167.8,
+      "product_ui_acceptance": 310.3,
+      "ha_card_capture": 245.1,
+      "animation_acceptance": 68.3,
+      "evidence_upload": 15
+    }
+  },
+  "internal_metrics": {
+    "status": "instrumentation_added_in_3045976a8085d22a958847b12d5abd7f306761b2"
+  }
+}

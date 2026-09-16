@@ -1,20 +1,32 @@
 #!/bin/bash
 set -euo pipefail
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ci_runtime.sh"
+CI_RUNTIME_SCOPE="${CI_RUNTIME_SCOPE:-full}"
+
 PROJECT="IOSNext.xcodeproj"
 SCHEME="IOSNext"
+
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then
+  test -f "$IOSNEXT_XCTESTRUN"
+  XCODEBUILD_TEST_ARGS=(-xctestrun "$IOSNEXT_XCTESTRUN")
+else
+  XCODEBUILD_TEST_ARGS=(-project "$PROJECT" -scheme "$SCHEME")
+fi
 IPHONE_NAME="iPhone 17 Pro"
 OUT_DIR="UIAcceptance"
 
 rm -rf "$OUT_DIR" UITestResults-iPhone.xcresult UITestResults-iPad.xcresult
 mkdir -p "$OUT_DIR"
 
+runtime_start device_discovery
 devices_json="$(xcrun simctl list devices available -j)"
 iphone_id="$(printf '%s' "$devices_json" | IPHONE_NAME="$IPHONE_NAME" python3 -c 'import json,os,sys; data=json.load(sys.stdin); name=os.environ["IPHONE_NAME"]; print(next(d["udid"] for ds in data["devices"].values() for d in ds if d.get("isAvailable", True) and d["name"] == name))')"
 ipad_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(d["udid"] for ds in data["devices"].values() for d in ds if d.get("isAvailable", True) and d["name"].startswith("iPad")))')"
 
 test -n "$iphone_id"
 test -n "$ipad_id"
+runtime_end device_discovery
 printf 'iphone=%s\nipad=%s\n' "$iphone_id" "$ipad_id" | tee "$OUT_DIR/devices.txt"
 
 xcrun simctl help ui 2>&1 | tee "$OUT_DIR/simctl-ui-help.txt"
@@ -64,32 +76,39 @@ run_accessibility_variant() {
   record_accessibility_state "$iphone_id" "$name"
 
   rm -rf "$OUT_DIR/$name.xcresult"
+  runtime_count xcodebuild_invocations
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then runtime_count xctestrun_invocations; fi
+  runtime_start xcodebuild_ui_variant
   xcodebuild test-without-building \
-    -project "$PROJECT" \
-    -scheme "$SCHEME" \
+    "${XCODEBUILD_TEST_ARGS[@]}" \
     -destination "platform=iOS Simulator,id=$iphone_id" \
-    "-only-testing:IOSNextUITests/$test_name" \
+    "-only-testing:IOSNextUITests/IOSNextUITests/$test_name" \
     -resultBundlePath "$OUT_DIR/$name.xcresult" \
     | tee -a xcodebuild.log
+  runtime_end xcodebuild_ui_variant
 }
 
-xcrun simctl boot "$iphone_id" 2>/dev/null || true
+runtime_start simulator_boot_iphone
+if xcrun simctl boot "$iphone_id" 2>/dev/null; then runtime_count simulator_boots; fi
 xcrun simctl bootstatus "$iphone_id" -b
+runtime_end simulator_boot_iphone
 reset_accessibility "$iphone_id"
 
+runtime_count xcodebuild_invocations
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then runtime_count xctestrun_invocations; fi
+runtime_start xcodebuild_ui_iphone
 xcodebuild test-without-building \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
+  "${XCODEBUILD_TEST_ARGS[@]}" \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -only-testing:IOSNextUITests \
-  -skip-testing:IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
-  -skip-testing:IOSNextUITests/testAccessibilityCoreScreenRenders \
-  -skip-testing:IOSNextUITests/testDynamicTypeAccessibilityState \
-  -skip-testing:IOSNextUITests/testReduceMotionAccessibilityState \
-  -skip-testing:IOSNextUITests/testReduceTransparencyAccessibilityState \
-  -skip-testing:IOSNextUITests/testIncreaseContrastAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testDynamicTypeAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testReduceMotionAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testReduceTransparencyAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testIncreaseContrastAccessibilityState \
   -resultBundlePath UITestResults-iPhone.xcresult \
   | tee -a xcodebuild.log
+runtime_end xcodebuild_ui_iphone
 
 run_accessibility_variant dynamic-type-xxxl testDynamicTypeAccessibilityState \
   xcrun simctl ui "$iphone_id" content_size accessibility-extra-extra-extra-large
@@ -102,15 +121,21 @@ run_accessibility_variant increase-contrast testIncreaseContrastAccessibilitySta
 
 reset_accessibility "$iphone_id"
 
-xcrun simctl boot "$ipad_id" 2>/dev/null || true
+runtime_start simulator_boot_ipad
+if xcrun simctl boot "$ipad_id" 2>/dev/null; then runtime_count simulator_boots; fi
 xcrun simctl bootstatus "$ipad_id" -b
+runtime_end simulator_boot_ipad
 reset_accessibility "$ipad_id"
 
+runtime_count xcodebuild_invocations
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then runtime_count xctestrun_invocations; fi
+runtime_start xcodebuild_ui_ipad
 xcodebuild test-without-building \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
+  "${XCODEBUILD_TEST_ARGS[@]}" \
   -destination "platform=iOS Simulator,id=$ipad_id" \
-  -only-testing:IOSNextUITests/testPrimaryProductScreensRenderLightAndDark \
-  -only-testing:IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
+  -only-testing:IOSNextUITests/IOSNextUITests/testPrimaryProductScreensRenderLightAndDark \
+  -only-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
   -resultBundlePath UITestResults-iPad.xcresult \
   | tee -a xcodebuild.log
+
+runtime_end xcodebuild_ui_ipad
