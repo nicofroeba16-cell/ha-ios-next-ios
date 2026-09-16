@@ -120,12 +120,61 @@ jobs:
           nc -z 127.0.0.1 "$port"
           echo "FAKE_HA_PORT=$port" >> "$GITHUB_ENV"
           echo "Using isolated fake HA port $port"
+      - name: Inject fake Home Assistant port into xctestrun
+        run: |
+          set -euo pipefail
+          xctestrun="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type f -name '*.xctestrun' -print -quit)"
+          test -f "$xctestrun"
+          python3 - "$xctestrun" "$FAKE_HA_PORT" <<'PY'
+          import plistlib
+          import sys
+
+          path, port = sys.argv[1], sys.argv[2]
+          with open(path, "rb") as handle:
+              payload = plistlib.load(handle)
+
+          updated = 0
+
+          def visit(node):
+              global updated
+              if isinstance(node, dict):
+                  blueprint = str(node.get("BlueprintName", ""))
+                  test_bundle = str(node.get("TestBundlePath", ""))
+                  if blueprint == "IOSNextTests" or "IOSNextTests" in test_bundle:
+                      env = node.setdefault("EnvironmentVariables", {})
+                      env["FAKE_HA_PORT"] = port
+                      updated += 1
+                  for value in node.values():
+                      visit(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      visit(value)
+
+          visit(payload)
+
+          if updated == 0:
+              for key, value in payload.items():
+                  if key.startswith("__") or not isinstance(value, dict):
+                      continue
+                  bundle = str(value.get("TestBundlePath", ""))
+                  if "IOSNextTests" in key or "IOSNextTests" in bundle:
+                      value.setdefault("EnvironmentVariables", {})["FAKE_HA_PORT"] = port
+                      updated += 1
+
+          if updated == 0:
+              raise SystemExit("No IOSNextTests target found in xctestrun")
+
+          with open(path, "wb") as handle:
+              plistlib.dump(payload, handle)
+
+          print(f"Injected FAKE_HA_PORT={port} into {updated} IOSNextTests target(s)")
+          PY
+          echo "XCTESTRUN_PATH=$xctestrun" >> "$GITHUB_ENV"
       - name: Run tests without rebuilding
         run: |
           set -o pipefail
           xcodebuild test-without-building \
-            -project IOSNext.xcodeproj \
-            -scheme IOSNext \
+            -xctestrun "$XCTESTRUN_PATH" \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
             -only-testing:IOSNextTests \
             -resultBundlePath FastTestResults.xcresult \

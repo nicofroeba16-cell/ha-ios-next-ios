@@ -291,10 +291,14 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(entity.attributes["skip_interval_seconds"]?.numberValue, 10)
     }
 
-    private func fakeHAConfiguration(_ mode: String) -> HomeAssistantConfiguration {
+    private func fakeHABaseURL(_ mode: String) -> URL {
         let port = ProcessInfo.processInfo.environment["FAKE_HA_PORT"] ?? "18765"
-        return HomeAssistantConfiguration(
-            baseURL: URL(string: "http://127.0.0.1:\(port)?mode=\(mode)")!,
+        return URL(string: "http://127.0.0.1:\(port)?mode=\(mode)")!
+    }
+
+    private func fakeHAConfiguration(_ mode: String) -> HomeAssistantConfiguration {
+        HomeAssistantConfiguration(
+            baseURL: fakeHABaseURL(mode),
             accessToken: "integration-test-token"
         )
     }
@@ -421,7 +425,7 @@ final class IOSNextTests: XCTestCase {
             client: HomeAssistantClient(timing: .integrationTest)
         )
         await model.connect(
-            serverURL: URL(string: "http://127.0.0.1:18765?mode=close_once")!,
+            serverURL: fakeHABaseURL("close_once"),
             accessToken: "integration-test-token",
             persist: false
         )
