@@ -255,6 +255,15 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(HomeAssistantClient.commandTimeoutSeconds(for: "call_service"), 10)
     }
 
+    func testHomeAssistantJSONBridgeKeepsNumericMessageIDsNumeric() throws {
+        let payload = try JSONSerialization.jsonObject(
+            with: Data(#"{"id":1,"success":true}"#.utf8)
+        ) as! [String: Any]
+
+        XCTAssertEqual(JSONValue(any: payload["id"] as Any), .number(1))
+        XCTAssertEqual(JSONValue(any: payload["success"] as Any), .bool(true))
+    }
+
     func testReconnectBackoffIncludesBoundedJitter() {
         XCTAssertEqual(AppModel.reconnectDelaySeconds(attempt: 1, jitterFraction: 0), 1, accuracy: 0.001)
         XCTAssertEqual(AppModel.reconnectDelaySeconds(attempt: 5, jitterFraction: 0), 16, accuracy: 0.001)

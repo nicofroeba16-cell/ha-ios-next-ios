@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 struct HomeAssistantConfiguration: Codable, Equatable, Sendable {
     let baseURL: URL
@@ -429,13 +430,24 @@ private extension HomeAssistantEntity {
 extension JSONValue {
     init?(any: Any) {
         switch any {
-        case let value as String: self = .string(value)
-        case let value as Bool: self = .bool(value)
-        case let value as NSNumber: self = .number(value.doubleValue)
-        case let value as [String: Any]: self = .object(value.compactMapValues(JSONValue.init(any:)))
-        case let value as [Any]: self = .array(value.compactMap(JSONValue.init(any:)))
-        case is NSNull: self = .null
-        default: return nil
+        case let value as String:
+            self = .string(value)
+        case let value as NSNumber:
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                self = .bool(value.boolValue)
+            } else {
+                self = .number(value.doubleValue)
+            }
+        case let value as Bool:
+            self = .bool(value)
+        case let value as [String: Any]:
+            self = .object(value.compactMapValues(JSONValue.init(any:)))
+        case let value as [Any]:
+            self = .array(value.compactMap(JSONValue.init(any:)))
+        case is NSNull:
+            self = .null
+        default:
+            return nil
         }
     }
 }
