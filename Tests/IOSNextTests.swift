@@ -269,6 +269,7 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(ProductAcceptanceRootView.screen(from: ["app", "--product-ui-test-screen=invalid"]), .home)
     }
 
+    @MainActor
     func testFireTVCompanionPreviewContract() throws {
         let entity = try XCTUnwrap(
             AppModel.preview.entities.first { $0.entityID == "media_player.fire_tv_companion" }
@@ -277,7 +278,7 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(entity.state, "playing")
         XCTAssertEqual(entity.mediaTitle, "Companion Testfilm")
         XCTAssertEqual(entity.mediaContentType, "video")
-        XCTAssertEqual(entity.volumeLevel, 0.52, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(entity.volumeLevel), 0.52, accuracy: 0.001)
         XCTAssertEqual(entity.attributes["skip_interval_seconds"]?.numberValue, 10)
     }
 
