@@ -39,6 +39,8 @@ final class ChatModel {
     var ownSafetyNumber = ""
     var recipientSafetyNumbers: [String] = []
     var isSending = false
+    var accessRole: ChatAccessRole?
+    var lastCreatedTicketID: String?
 
     private let relay = ChatRelayClient()
     private var configuration: ChatConfiguration?
@@ -83,6 +85,11 @@ final class ChatModel {
                 identity: keys.publicIdentity(userID: configuration.userID, deviceID: configuration.deviceID),
                 configuration: configuration
             )
+            let session = try await relay.session(configuration: configuration)
+            guard session.userID == configuration.userID else {
+                throw ChatError.invalidResponse
+            }
+            accessRole = session.role
             try await updateRecipientSafetyNumbers()
             state = .online
             receiveTask = Task { [weak self] in await self?.receiveLoop() }
@@ -103,6 +110,8 @@ final class ChatModel {
         partialMessages.removeAll(keepingCapacity: false)
         seenEnvelopeIDs.removeAll(keepingCapacity: false)
         configuration = nil
+        accessRole = nil
+        lastCreatedTicketID = nil
         KeychainStore.delete(account: tokenAccount)
         UserDefaults.standard.removeObject(forKey: endpointKey)
         UserDefaults.standard.removeObject(forKey: userKey)
@@ -185,6 +194,28 @@ final class ChatModel {
         } catch {
             updateDelivery(id: groupID, to: .failed)
             lastError = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func createSupportTicket(message: String) async -> String? {
+        guard let configuration else { return nil }
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, normalized.count <= 4000 else {
+            lastError = "Das Ticket muss zwischen 1 und 4.000 Zeichen enthalten."
+            return nil
+        }
+        do {
+            lastError = nil
+            let ticket = try await relay.createSupportTicket(
+                message: normalized,
+                configuration: configuration
+            )
+            lastCreatedTicketID = ticket.id
+            return ticket.id
+        } catch {
+            lastError = error.localizedDescription
+            return nil
         }
     }
 

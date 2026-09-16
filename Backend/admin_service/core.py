@@ -209,6 +209,156 @@ class AdminStore:
             ).fetchone()
         return row is not None
 
+    def chat_role(self, user_id: str) -> str:
+        user_id = self._validate_identifier(user_id, "user_id")
+        return "owner" if user_id == self.identity.subject else "member"
+
+    def create_support_ticket(self, requester_user_id: str, message: str) -> dict[str, Any]:
+        requester_user_id = self._validate_identifier(requester_user_id, "requester_user_id")
+        message = self._validate_ticket_message(message)
+        ticket_id = f"ticket-{uuid.uuid4()}"
+        message_id = f"ticket-message-{uuid.uuid4()}"
+        created_at = utc_now()
+        with self._lock:
+            self._database.execute(
+                """
+                INSERT INTO support_tickets(id, requester_user_id, status, created_at, updated_at)
+                VALUES (?, ?, 'open', ?, ?)
+                """,
+                (ticket_id, requester_user_id, created_at, created_at),
+            )
+            self._database.execute(
+                """
+                INSERT INTO support_ticket_messages(
+                    id, ticket_id, author_user_id, author_role, body, created_at
+                ) VALUES (?, ?, ?, 'member', ?, ?)
+                """,
+                (message_id, ticket_id, requester_user_id, message, created_at),
+            )
+            self._database.commit()
+        self._write_audit(requester_user_id, "ticket-create", "success")
+        return self.support_ticket(ticket_id)
+
+    def support_tickets(self, limit: int = 100) -> list[dict[str, Any]]:
+        safe_limit = min(max(limit, 1), 200)
+        with self._lock:
+            rows = self._database.execute(
+                """
+                SELECT id, requester_user_id, status, created_at, updated_at
+                FROM support_tickets ORDER BY updated_at DESC LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        return [self._ticket_summary(dict(row)) for row in rows]
+
+    def support_ticket(self, ticket_id: str) -> dict[str, Any]:
+        ticket_id = self._validate_identifier(ticket_id, "ticket_id", max_length=80)
+        with self._lock:
+            row = self._database.execute(
+                """
+                SELECT id, requester_user_id, status, created_at, updated_at
+                FROM support_tickets WHERE id = ?
+                """,
+                (ticket_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("ticket_not_found")
+            messages = self._database.execute(
+                """
+                SELECT id, author_user_id, author_role, body, created_at
+                FROM support_ticket_messages
+                WHERE ticket_id = ? ORDER BY rowid ASC
+                """,
+                (ticket_id,),
+            ).fetchall()
+        payload = dict(row)
+        payload["messages"] = [dict(message) for message in messages]
+        return payload
+
+    def add_support_ticket_message(
+        self,
+        ticket_id: str,
+        author_user_id: str,
+        author_role: str,
+        message: str,
+    ) -> dict[str, Any]:
+        ticket_id = self._validate_identifier(ticket_id, "ticket_id", max_length=80)
+        author_user_id = self._validate_identifier(author_user_id, "author_user_id")
+        if author_role not in {"owner", "member"}:
+            raise ValueError("invalid author_role")
+        message = self._validate_ticket_message(message)
+        created_at = utc_now()
+        with self._lock:
+            ticket = self._database.execute(
+                "SELECT requester_user_id FROM support_tickets WHERE id = ?",
+                (ticket_id,),
+            ).fetchone()
+            if ticket is None:
+                raise KeyError("ticket_not_found")
+            if author_role != "owner" and ticket["requester_user_id"] != author_user_id:
+                raise PermissionError("ticket_scope_violation")
+            self._database.execute(
+                """
+                INSERT INTO support_ticket_messages(
+                    id, ticket_id, author_user_id, author_role, body, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"ticket-message-{uuid.uuid4()}",
+                    ticket_id,
+                    author_user_id,
+                    author_role,
+                    message,
+                    created_at,
+                ),
+            )
+            self._database.execute(
+                "UPDATE support_tickets SET updated_at = ? WHERE id = ?",
+                (created_at, ticket_id),
+            )
+            self._database.commit()
+        self._write_audit(author_user_id, "ticket-message", "success")
+        return self.support_ticket(ticket_id)
+
+    def update_support_ticket_status(self, ticket_id: str, status: str, actor: str) -> dict[str, Any]:
+        ticket_id = self._validate_identifier(ticket_id, "ticket_id", max_length=80)
+        actor = self._validate_identifier(actor, "actor")
+        if status not in {"open", "in_progress", "resolved"}:
+            raise ValueError("invalid ticket status")
+        updated_at = utc_now()
+        with self._lock:
+            cursor = self._database.execute(
+                "UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?",
+                (status, updated_at, ticket_id),
+            )
+            if cursor.rowcount != 1:
+                self._database.rollback()
+                raise KeyError("ticket_not_found")
+            self._database.commit()
+        self._write_audit(actor, f"ticket-status-{status}", "success")
+        return self.support_ticket(ticket_id)
+
+    def _ticket_summary(self, ticket: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            row = self._database.execute(
+                """
+                SELECT body FROM support_ticket_messages
+                WHERE ticket_id = ? ORDER BY rowid DESC LIMIT 1
+                """,
+                (ticket["id"],),
+            ).fetchone()
+        ticket["last_message"] = row["body"] if row else ""
+        return ticket
+
+    @staticmethod
+    def _validate_ticket_message(value: Any) -> str:
+        if not isinstance(value, str):
+            raise ValueError("invalid ticket message")
+        normalized = value.strip()
+        if not 1 <= len(normalized) <= 4000:
+            raise ValueError("invalid ticket message")
+        return normalized
+
     def validate_chat_envelope(self, payload: dict[str, Any]) -> dict[str, Any]:
         message_id = self._required_identifier(payload, "id", max_length=80)
         group_id = self._required_identifier(payload, "group_id", max_length=80)
@@ -255,6 +405,7 @@ class AdminStore:
         with self._lock:
             self._database.executescript(
                 """
+                PRAGMA foreign_keys=ON;
                 PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
@@ -275,6 +426,26 @@ class AdminStore:
                     updated_at TEXT NOT NULL,
                     PRIMARY KEY(user_id, device_id)
                 );
+                CREATE TABLE IF NOT EXISTS support_tickets (
+                    id TEXT PRIMARY KEY,
+                    requester_user_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS support_ticket_messages (
+                    id TEXT PRIMARY KEY,
+                    ticket_id TEXT NOT NULL,
+                    author_user_id TEXT NOT NULL,
+                    author_role TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS support_tickets_updated_idx
+                    ON support_tickets(updated_at DESC);
+                CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx
+                    ON support_ticket_messages(ticket_id, created_at);
                 DROP TABLE IF EXISTS chat_messages;
                 """
             )

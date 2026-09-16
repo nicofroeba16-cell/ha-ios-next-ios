@@ -55,6 +55,31 @@ final class IOSNextTests: XCTestCase {
         XCTAssertTrue(AdminAction.createBackup.requiresFreshBiometrics)
     }
 
+    func testChatSessionDecodesServerSideOwnerRole() throws {
+        let data = Data(#"{"user_id":"nico","role":"owner"}"#.utf8)
+        let session = try JSONDecoder().decode(ChatSession.self, from: data)
+        XCTAssertEqual(session.userID, "nico")
+        XCTAssertEqual(session.role, .owner)
+    }
+
+    func testSupportTicketDecodesSummaryAndConversation() throws {
+        let summaryData = Data(
+            #"{"id":"ticket-1","requester_user_id":"mika","status":"open","created_at":"2026-09-16T18:00:00Z","updated_at":"2026-09-16T18:01:00Z","last_message":"Bitte prüfen"}"#.utf8
+        )
+        let summary = try JSONDecoder().decode(SupportTicket.self, from: summaryData)
+        XCTAssertEqual(summary.requesterUserID, "mika")
+        XCTAssertEqual(summary.lastMessage, "Bitte prüfen")
+        XCTAssertNil(summary.messages)
+
+        let detailData = Data(
+            #"{"id":"ticket-1","requester_user_id":"mika","status":"in_progress","created_at":"2026-09-16T18:00:00Z","updated_at":"2026-09-16T18:02:00Z","messages":[{"id":"message-1","author_user_id":"nico","author_role":"owner","body":"Übernommen","created_at":"2026-09-16T18:02:00Z"}]}"#.utf8
+        )
+        let detail = try JSONDecoder().decode(SupportTicket.self, from: detailData)
+        XCTAssertEqual(detail.status, "in_progress")
+        XCTAssertEqual(detail.messages?.first?.authorRole, .owner)
+        XCTAssertEqual(detail.messages?.first?.body, "Übernommen")
+    }
+
     func testTimoProfileContainsOnlyVerifiedFavorites() {
         let definition = ProfileCatalog.definition(for: .timo)
         XCTAssertEqual(definition.favoriteEntityIDs, [

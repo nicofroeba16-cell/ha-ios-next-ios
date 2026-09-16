@@ -147,8 +147,66 @@ actor AdminControlClient {
         try await request(path: "v1/admin/audit?limit=50", method: "GET", configuration: configuration)
     }
 
+    func tickets(configuration: AdminControlConfiguration) async throws -> [SupportTicket] {
+        try await request(path: "v1/admin/tickets?limit=100", method: "GET", configuration: configuration)
+    }
+
+    func ticket(id: String, configuration: AdminControlConfiguration) async throws -> SupportTicket {
+        try await request(path: "v1/admin/tickets/\(id)", method: "GET", configuration: configuration)
+    }
+
+    func reply(
+        ticketID: String,
+        message: String,
+        configuration: AdminControlConfiguration
+    ) async throws -> SupportTicket {
+        try await request(
+            path: "v1/admin/tickets/\(ticketID)/messages",
+            method: "POST",
+            body: SupportTicketMessageRequest(message: message),
+            configuration: configuration
+        )
+    }
+
+    func updateTicketStatus(
+        ticketID: String,
+        status: String,
+        configuration: AdminControlConfiguration
+    ) async throws -> SupportTicket {
+        try await request(
+            path: "v1/admin/tickets/\(ticketID)/status",
+            method: "POST",
+            body: SupportTicketStatusRequest(status: status),
+            configuration: configuration
+        )
+    }
+
     func perform(_ action: AdminAction, configuration: AdminControlConfiguration) async throws -> AdminActionReceipt {
         try await request(path: "v1/admin/actions/\(action.rawValue)", method: "POST", configuration: configuration)
+    }
+
+    private func request<Response: Decodable, Body: Encodable>(
+        path: String,
+        method: String,
+        body: Body,
+        configuration: AdminControlConfiguration
+    ) async throws -> Response {
+        guard let url = URL(string: path, relativeTo: configuration.baseURL)?.absoluteURL else {
+            throw AdminControlError.invalidConfiguration
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 20
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Bearer \(configuration.ownerToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AdminControlError.invalidResponse }
+        if http.statusCode == 401 || http.statusCode == 403 { throw AdminControlError.forbidden }
+        guard (200..<300).contains(http.statusCode) else { throw AdminControlError.rejected(http.statusCode) }
+        return try decoder.decode(Response.self, from: data)
     }
 
     private func request<Response: Decodable>(
@@ -187,6 +245,8 @@ final class AdminControlModel {
     var state: State = .notConfigured
     var backendStatus: AdminBackendStatus?
     var auditEvents: [AdminAuditEvent] = []
+    var supportTickets: [SupportTicket] = []
+    var ticketDetails: [String: SupportTicket] = [:]
     var isLoading = false
     var lastReceipt: AdminActionReceipt?
     var lastError: String?
@@ -230,6 +290,8 @@ final class AdminControlModel {
     func lock() {
         backendStatus = nil
         auditEvents = []
+        supportTickets = []
+        ticketDetails = [:]
         state = configuration == nil ? .notConfigured : .locked
     }
 
@@ -241,8 +303,58 @@ final class AdminControlModel {
             lastError = nil
             async let status = client.status(configuration: configuration)
             async let audit = client.audit(configuration: configuration)
+            async let tickets = client.tickets(configuration: configuration)
             backendStatus = try await status
             auditEvents = try await audit
+            supportTickets = try await tickets
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func loadTicket(_ id: String) async {
+        guard case .unlocked = state, let configuration else { return }
+        do {
+            lastError = nil
+            ticketDetails[id] = try await client.ticket(id: id, configuration: configuration)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func replyToTicket(_ id: String, message: String) async -> Bool {
+        guard case .unlocked = state, let configuration else { return false }
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, normalized.count <= 4000 else {
+            lastError = "Die Antwort muss zwischen 1 und 4.000 Zeichen enthalten."
+            return false
+        }
+        do {
+            lastError = nil
+            ticketDetails[id] = try await client.reply(
+                ticketID: id,
+                message: normalized,
+                configuration: configuration
+            )
+            supportTickets = try await client.tickets(configuration: configuration)
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    func setTicketStatus(_ id: String, status: String) async {
+        guard case .unlocked = state, let configuration else { return }
+        do {
+            lastError = nil
+            ticketDetails[id] = try await client.updateTicketStatus(
+                ticketID: id,
+                status: status,
+                configuration: configuration
+            )
+            supportTickets = try await client.tickets(configuration: configuration)
         } catch {
             lastError = error.localizedDescription
         }
@@ -270,6 +382,8 @@ final class AdminControlModel {
         KeychainStore.delete(account: tokenAccount)
         backendStatus = nil
         auditEvents = []
+        supportTickets = []
+        ticketDetails = [:]
         lastError = nil
         state = .notConfigured
     }

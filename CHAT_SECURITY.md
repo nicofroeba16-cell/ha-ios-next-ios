@@ -37,3 +37,15 @@ Eine App-Installation darf unter iOS nicht stillschweigend einen VPN-Tunnel akti
 3. Ein separat verwaltetes WireGuard-/Tailscale-VPN; die App nutzt dessen private DNS-Namen.
 
 WireGuard ist als Packet Tunnel implementiert. Die App akzeptiert nur einen engen `wg-quick`-Teilumfang, blockiert Skriptanweisungen, speichert die private Konfiguration als this-device-only Keychain-Eintrag und übergibt der Extension nur eine persistente Referenz. Für die Endabnahme fehlen noch die konkrete Serverkonfiguration, Apples Network-Extension-Freigabe/Signierung, die einmalige iOS-Systemzustimmung und der Test auf echter Hardware.
+
+
+## Owner-Tickets sind kein Chatverlauf
+
+Support-/Admin-Anfragen anderer Benutzer laufen über einen bewusst getrennten Ticketkanal:
+
+- GET /v1/chat/session liefert die serverseitig aufgelöste Rolle owner oder member.
+- POST /v1/chat/tickets erstellt als authentifizierter Chat-Benutzer ein Ticket.
+- Tickets werden persistent in der Admin-SQLite-Datenbank gespeichert und sind deshalb ausdrücklich nicht Teil der No-Storage-Garantie des E2EE-Chats.
+- Ein Chat-Token darf die Owner-Ticket-Inbox nicht lesen und kann keine Owner-Antwort auf fremde Tickets schreiben.
+- Lesen, Antworten und Statusänderungen in der Owner-Inbox erfordern den getrennten Owner-Token; die iOS-App hält diesen weiterhin im Schlüsselbund und öffnet Owner Control erst nach Face ID.
+- Tickettexte dürfen keine Passwörter, Tokens, privaten Schlüssel oder andere Secrets enthalten.

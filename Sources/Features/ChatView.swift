@@ -11,6 +11,8 @@ struct ChatView: View {
     @State private var isPresentingCamera = false
     @State private var isPresentingConfiguration = false
     @State private var isPresentingSecurity = false
+    @State private var isPresentingSupportTicket = false
+    @State private var isPresentingOwnerControl = false
     @State private var voicePressIsActive = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -44,6 +46,15 @@ struct ChatView: View {
                     Button("Chat einrichten", systemImage: "gearshape") {
                         isPresentingConfiguration = true
                     }
+                    if chatModel.accessRole == .owner {
+                        Button("Owner Control", systemImage: "person.badge.key.fill") {
+                            isPresentingOwnerControl = true
+                        }
+                    } else if chatModel.accessRole == .member {
+                        Button("Ticket an Owner", systemImage: "ticket.fill") {
+                            isPresentingSupportTicket = true
+                        }
+                    }
                     Button("Lokalen Verlauf löschen", systemImage: "trash", role: .destructive) {
                         chatModel.messages.removeAll(keepingCapacity: false)
                     }
@@ -60,6 +71,12 @@ struct ChatView: View {
         }
         .sheet(isPresented: $isPresentingSecurity) {
             ChatSecurityView(chatModel: chatModel)
+        }
+        .sheet(isPresented: $isPresentingSupportTicket) {
+            SupportTicketComposerView(chatModel: chatModel)
+        }
+        .sheet(isPresented: $isPresentingOwnerControl) {
+            AdminAreaView()
         }
         .fullScreenCover(isPresented: $isPresentingCamera) {
             InMemoryCameraPicker { image in
@@ -125,11 +142,22 @@ struct ChatView: View {
                 .font(.footnote)
                 .padding(10)
         case .online:
-            Label("Ende-zu-Ende verschlüsselt · flüchtiger Relay", systemImage: "lock.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 8)
-                .accessibilityLabel("Ende-zu-Ende verschlüsselt. Nachrichten werden nicht gespeichert.")
+            VStack(spacing: 4) {
+                Label("Ende-zu-Ende verschlüsselt · flüchtiger Relay", systemImage: "lock.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                if chatModel.accessRole == .owner {
+                    Label("Owner serverseitig bestätigt · Admin-Steuerung verfügbar", systemImage: "checkmark.shield.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.green)
+                } else if chatModel.accessRole == .member {
+                    Label("Admin-Anfragen werden separat als Ticket gespeichert", systemImage: "ticket.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 8)
+            .accessibilityLabel("Ende-zu-Ende verschlüsselt. Nachrichten werden nicht gespeichert.")
         case let .offline(message):
             HStack {
                 Label("Offline", systemImage: "wifi.slash")
@@ -265,6 +293,59 @@ struct ChatView: View {
             get: { chatModel.lastError != nil },
             set: { if !$0 { chatModel.lastError = nil } }
         )
+    }
+}
+
+private struct SupportTicketComposerView: View {
+    let chatModel: ChatModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var message = ""
+    @State private var isSubmitting = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextEditor(text: $message)
+                        .frame(minHeight: 180)
+                } header: {
+                    Text("Anfrage an den Owner")
+                } footer: {
+                    Text("Tickets sind absichtlich persistent und getrennt vom flüchtigen E2EE-Chat. Keine Passwörter, Tokens oder privaten Schlüssel eintragen.")
+                }
+
+                if let ticketID = chatModel.lastCreatedTicketID {
+                    Section("Letztes Ticket") {
+                        Text(ticketID)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            .navigationTitle("Owner-Ticket")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Ticket senden") {
+                        Task {
+                            isSubmitting = true
+                            defer { isSubmitting = false }
+                            if await chatModel.createSupportTicket(message: message) != nil {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(
+                        isSubmitting
+                            || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || message.count > 4000
+                    )
+                }
+            }
+        }
     }
 }
 

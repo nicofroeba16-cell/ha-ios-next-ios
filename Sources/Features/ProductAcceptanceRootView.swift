@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 enum ProductAcceptanceScreen: String, CaseIterable {
@@ -72,6 +73,17 @@ struct ProductAcceptanceRootView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("product-acceptance-\(screen.rawValue)")
         .accessibilityValue(accessibilityStateDescription)
+        .task(id: screen.rawValue) {
+            await markCurrentScreenReady()
+        }
+    }
+
+    private func markCurrentScreenReady() async {
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        let marker = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iosnext-product-screen-ready-\(screen.rawValue)")
+        try? Data(screen.rawValue.utf8).write(to: marker, options: .atomic)
     }
 
     private var accessibilityStateDescription: String {

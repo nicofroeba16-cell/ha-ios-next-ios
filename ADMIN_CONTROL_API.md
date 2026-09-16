@@ -24,3 +24,17 @@ The admin service must not implement an arbitrary shell endpoint.
 - `POST /v1/admin/actions/create-backup`
 
 The owner entry is opened by tapping the `iOS 27` value seven times on the app information screen. Knowing this gesture grants no authorization.
+
+
+## Owner ticket channel
+
+Support tickets are deliberately separate from the ephemeral E2EE chat.
+
+- GET /v1/admin/tickets?limit=100
+- GET /v1/admin/tickets/<ticket-id>
+- POST /v1/admin/tickets/<ticket-id>/messages
+- POST /v1/admin/tickets/<ticket-id>/status
+
+These endpoints require the owner token. Ticket replies from the Owner UI therefore cannot be authorized with a normal chat token. The Owner UI remains protected by the existing server-side owner session and local Face ID gate.
+
+Ticket states are open, in_progress, and resolved.

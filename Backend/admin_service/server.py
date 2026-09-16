@@ -178,6 +178,21 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             except ValueError:
                 limit = 50
             self._json(HTTPStatus.OK, self.server.store.audit_events(limit=limit))
+        elif route.path == "/v1/admin/tickets":
+            query = parse_qs(route.query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except ValueError:
+                limit = 100
+            self._json(HTTPStatus.OK, self.server.store.support_tickets(limit=limit))
+        elif route.path.startswith("/v1/admin/tickets/"):
+            ticket_id = route.path.removeprefix("/v1/admin/tickets/")
+            try:
+                payload = self.server.store.support_ticket(ticket_id)
+            except (KeyError, ValueError):
+                self._json(HTTPStatus.NOT_FOUND, {"error": "ticket_not_found"})
+            else:
+                self._json(HTTPStatus.OK, payload)
         else:
             self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
 
@@ -190,6 +205,9 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             self._chat_post(route, principal)
             return
         if not self._authorize(self.server.owner_token):
+            return
+        if route.path.startswith("/v1/admin/tickets/"):
+            self._admin_ticket_post(route)
             return
         prefix = "/v1/admin/actions/"
         if not route.path.startswith(prefix):
@@ -206,6 +224,16 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.OK, receipt)
 
     def _chat_get(self, route: Any, principal: str) -> None:
+        if route.path == "/v1/chat/session":
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "user_id": principal,
+                    "role": self.server.store.chat_role(principal),
+                },
+            )
+            return
+
         identity_prefix = "/v1/chat/identities/"
         if route.path.startswith(identity_prefix):
             user_id = route.path.removeprefix(identity_prefix)
@@ -245,6 +273,19 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                     return
                 result = self.server.store.register_chat_identity(payload)
                 self._json(HTTPStatus.OK, result)
+            elif route.path == "/v1/chat/tickets":
+                message = payload.get("message")
+                result = self.server.store.create_support_ticket(principal, message)
+                self._json(HTTPStatus.CREATED, result)
+            elif route.path.startswith("/v1/chat/tickets/") and route.path.endswith("/messages"):
+                ticket_id = route.path.removeprefix("/v1/chat/tickets/").removesuffix("/messages")
+                result = self.server.store.add_support_ticket_message(
+                    ticket_id,
+                    principal,
+                    "member",
+                    payload.get("message"),
+                )
+                self._json(HTTPStatus.CREATED, result)
             elif route.path == "/v1/chat/messages":
                 envelope = self.server.store.validate_chat_envelope(payload)
                 if envelope["sender_user_id"] != principal:
@@ -266,12 +307,46 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                 self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
         except (ValueError, json.JSONDecodeError):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_payload"})
-        except KeyError:
-            self._json(HTTPStatus.CONFLICT, {"error": "duplicate_message"})
+        except KeyError as error:
+            if error.args and error.args[0] == "ticket_not_found":
+                self._json(HTTPStatus.NOT_FOUND, {"error": "ticket_not_found"})
+            else:
+                self._json(HTTPStatus.CONFLICT, {"error": "duplicate_message"})
+        except PermissionError:
+            self._json(HTTPStatus.FORBIDDEN, {"error": "ticket_scope_violation"})
         except IdentityConflictError:
             self._json(HTTPStatus.CONFLICT, {"error": "identity_key_conflict"})
         except OverflowError:
             self._json(HTTPStatus.INSUFFICIENT_STORAGE, {"error": "relay_capacity_exceeded"})
+
+    def _admin_ticket_post(self, route: Any) -> None:
+        suffix = route.path.removeprefix("/v1/admin/tickets/")
+        try:
+            payload = self._read_json()
+            if suffix.endswith("/messages"):
+                ticket_id = suffix.removesuffix("/messages")
+                result = self.server.store.add_support_ticket_message(
+                    ticket_id,
+                    self.server.store.identity.subject,
+                    "owner",
+                    payload.get("message"),
+                )
+                self._json(HTTPStatus.CREATED, result)
+                return
+            if suffix.endswith("/status"):
+                ticket_id = suffix.removesuffix("/status")
+                result = self.server.store.update_support_ticket_status(
+                    ticket_id,
+                    payload.get("status"),
+                    self.server.store.identity.subject,
+                )
+                self._json(HTTPStatus.OK, result)
+                return
+            self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+        except (ValueError, json.JSONDecodeError):
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_payload"})
+        except KeyError:
+            self._json(HTTPStatus.NOT_FOUND, {"error": "ticket_not_found"})
 
     def _read_json(self) -> dict[str, Any]:
         try:

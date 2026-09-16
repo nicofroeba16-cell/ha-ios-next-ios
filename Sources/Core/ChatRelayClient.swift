@@ -37,6 +37,27 @@ actor ChatRelayClient {
         )
     }
 
+    func session(configuration: ChatConfiguration) async throws -> ChatSession {
+        try await request(
+            path: "v1/chat/session",
+            method: "GET",
+            body: Optional<String>.none,
+            configuration: configuration
+        )
+    }
+
+    func createSupportTicket(
+        message: String,
+        configuration: ChatConfiguration
+    ) async throws -> SupportTicket {
+        try await request(
+            path: "v1/chat/tickets",
+            method: "POST",
+            body: SupportTicketMessageRequest(message: message),
+            configuration: configuration
+        )
+    }
+
     func send(_ envelope: ChatEnvelope, configuration: ChatConfiguration) async throws -> ChatRelayReceipt {
         try await request(
             path: "v1/chat/messages",

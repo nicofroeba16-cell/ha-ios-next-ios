@@ -104,6 +104,38 @@ class AdminStoreTests(unittest.TestCase):
         with self.assertRaises(IdentityConflictError):
             self.store.register_chat_identity(identity)
 
+    def test_support_ticket_is_persistent_and_separate_from_ephemeral_chat(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Bitte Licht-Automation prüfen")
+        self.assertEqual(ticket["requester_user_id"], "mika")
+        self.assertEqual(ticket["status"], "open")
+        self.assertEqual(ticket["messages"][0]["author_role"], "member")
+        self.assertEqual(ticket["messages"][0]["body"], "Bitte Licht-Automation prüfen")
+        tables = {
+            row[0]
+            for row in self.store._database.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        self.assertIn("support_tickets", tables)
+        self.assertIn("support_ticket_messages", tables)
+        self.assertNotIn("chat_messages", tables)
+
+    def test_owner_can_reply_and_resolve_support_ticket(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Bitte prüfen")
+        ticket = self.store.add_support_ticket_message(
+            ticket["id"], "nico", "owner", "Ich kümmere mich darum."
+        )
+        self.assertEqual(ticket["messages"][-1]["author_role"], "owner")
+        ticket = self.store.update_support_ticket_status(ticket["id"], "resolved", "nico")
+        self.assertEqual(ticket["status"], "resolved")
+
+    def test_member_cannot_write_to_another_users_ticket(self) -> None:
+        ticket = self.store.create_support_ticket("mika", "Mein Ticket")
+        with self.assertRaises(PermissionError):
+            self.store.add_support_ticket_message(
+                ticket["id"], "juli", "member", "Fremde Nachricht"
+            )
+
 
 class EphemeralChatRelayTests(unittest.TestCase):
     def envelope(self, message_id: str = "message-1") -> dict:
@@ -162,10 +194,21 @@ class AdminHTTPServerTests(unittest.TestCase):
         self.store.close()
         self.temporary_directory.cleanup()
 
-    def request(self, method: str, path: str, authorized: bool = True) -> tuple[int, bytes]:
+    def request(
+        self,
+        method: str,
+        path: str,
+        authorized: bool = True,
+        payload: dict | None = None,
+    ) -> tuple[int, bytes]:
         connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=2)
         headers = {"Authorization": f"Bearer {'x' * 32}"} if authorized else {}
-        connection.request(method, path, headers=headers)
+        body = None
+        if payload is not None:
+            body = json.dumps(payload).encode()
+            headers["Content-Type"] = "application/json"
+            headers["Content-Length"] = str(len(body))
+        connection.request(method, path, body=body, headers=headers)
         response = connection.getresponse()
         body = response.read()
         connection.close()
@@ -284,6 +327,69 @@ class AdminHTTPServerTests(unittest.TestCase):
         self.assertEqual(status, 403)
         status, _ = self.chat_request(
             "GET", "/v1/chat/messages?recipient_device_id=ipad&wait=0"
+        )
+        self.assertEqual(status, 403)
+
+    def test_chat_session_distinguishes_owner_from_member(self) -> None:
+        status, body = self.chat_request("GET", "/v1/chat/session", token="c" * 32)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"user_id": "nico", "role": "owner"})
+
+        status, body = self.chat_request("GET", "/v1/chat/session", token="m" * 32)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"user_id": "mika", "role": "member"})
+
+    def test_member_creates_ticket_owner_reads_replies_and_resolves(self) -> None:
+        status, body = self.chat_request(
+            "POST",
+            "/v1/chat/tickets",
+            {"message": "Fernseher schaltet LED nicht korrekt."},
+            token="m" * 32,
+        )
+        self.assertEqual(status, 201)
+        ticket_id = json.loads(body)["id"]
+
+        status, body = self.request("GET", "/v1/admin/tickets")
+        self.assertEqual(status, 200)
+        tickets = json.loads(body)
+        self.assertEqual(tickets[0]["id"], ticket_id)
+        self.assertEqual(tickets[0]["requester_user_id"], "mika")
+
+        status, body = self.request(
+            "POST",
+            f"/v1/admin/tickets/{ticket_id}/messages",
+            payload={"message": "Ticket übernommen."},
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body)["messages"][-1]["author_role"], "owner")
+
+        status, body = self.request(
+            "POST",
+            f"/v1/admin/tickets/{ticket_id}/status",
+            payload={"status": "resolved"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["status"], "resolved")
+
+    def test_member_cannot_read_admin_ticket_inbox(self) -> None:
+        status, _ = self.chat_request("GET", "/v1/admin/tickets", token="m" * 32)
+        self.assertEqual(status, 401)
+
+    def test_owner_chat_token_cannot_bypass_admin_ticket_authorization(self) -> None:
+        status, body = self.chat_request(
+            "POST",
+            "/v1/chat/tickets",
+            {"message": "Member-Anfrage"},
+            token="m" * 32,
+        )
+        self.assertEqual(status, 201)
+        ticket_id = json.loads(body)["id"]
+
+        status, _ = self.chat_request(
+            "POST",
+            f"/v1/chat/tickets/{ticket_id}/messages",
+            {"message": "Nicht über den Owner-Chat-Token beantworten"},
+            token="c" * 32,
         )
         self.assertEqual(status, 403)
 

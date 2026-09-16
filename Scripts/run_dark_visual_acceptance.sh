@@ -26,23 +26,45 @@ test -d "$app_path"
 xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
 xcrun simctl uninstall "$device_id" "$APP_ID" 2>/dev/null || true
 xcrun simctl install "$device_id" "$app_path"
+data_container="$(xcrun simctl get_app_container "$device_id" "$APP_ID" data)"
+test -d "$data_container"
 
 rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR/product-screens"
+mkdir -p "$OUT_DIR/product-screens" "$OUT_DIR/logs"
 
 capture_product_screen() {
   local screen="$1"
   local destination="$OUT_DIR/product-screens/$screen.png"
+  local temp="$OUT_DIR/product-screens/.$screen-candidate.png"
+  local marker="$data_container/tmp/iosnext-product-screen-ready-$screen"
+  local attempt
 
-  xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
-  xcrun simctl launch "$device_id" "$APP_ID" \
-    "--product-ui-test-screen=$screen" \
-    --product-ui-test-dark >/tmp/iosnext-dark-product-launch.log
+  for attempt in 1 2 3 4; do
+    rm -f "$temp" "$marker"
+    xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
+    if ! xcrun simctl launch "$device_id" "$APP_ID" \
+      "--product-ui-test-screen=$screen" \
+      --product-ui-test-dark \
+      >"$OUT_DIR/logs/$screen-attempt-$attempt.log" 2>&1; then
+      continue
+    fi
 
-  # Product acceptance uses deterministic preview data; give SwiftUI one short settle window.
-  sleep 0.8
-  xcrun simctl io "$device_id" screenshot "$destination" >/dev/null
-  xcrun swift Scripts/validate_visual_capture.swift "$destination"
+    for _ in {1..60}; do
+      test -f "$marker" && break
+      sleep 0.1
+    done
+    test -f "$marker" || continue
+
+    sleep 0.15
+    xcrun simctl io "$device_id" screenshot "$temp" >/dev/null
+    if xcrun swift Scripts/validate_visual_capture.swift "$temp"; then
+      mv "$temp" "$destination"
+      return 0
+    fi
+  done
+
+  echo "Unable to capture stable Dark Mode screen: $screen" >&2
+  return 1
 }
 
 for screen in home rooms chat media system light media-detail owner wireguard; do

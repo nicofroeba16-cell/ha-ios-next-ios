@@ -121,6 +121,7 @@ struct AdminAreaView: View {
                 identityCard
                 if let status = model.backendStatus {
                     statusSection(status)
+                    ticketSection
                     actionsSection(status)
                 } else {
                     ProgressView("Backend-Status wird geladen …")
@@ -206,6 +207,46 @@ struct AdminAreaView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
+        }
+    }
+
+    private var ticketSection: some View {
+        VStack(alignment: .leading, spacing: IOSNextLayout.sectionSpacing) {
+            IOSNextSectionHeader(
+                title: "Owner-Tickets",
+                subtitle: "\(model.supportTickets.count) persistente Anfrage(n)",
+                symbol: "ticket.fill"
+            )
+            NavigationLink {
+                OwnerTicketInboxView(model: model)
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "ticket.fill")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                        .frame(width: 34)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Ticket-Chat öffnen")
+                            .font(.headline)
+                        Text("Anfragen anderer Benutzer lesen, beantworten und abschließen")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if !model.supportTickets.isEmpty {
+                        Text("\(model.supportTickets.filter { $0.status != "resolved" }.count)")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.tint.opacity(0.14), in: Capsule())
+                    }
+                    Image(systemName: "chevron.forward")
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(18)
+                .iosNextSurface()
+            }
+            .buttonStyle(.plain)
         }
     }
 
