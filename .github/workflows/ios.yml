@@ -162,9 +162,11 @@ jobs:
           runtime_count xcodebuild_invocations
           runtime_start unit_tests
           set -o pipefail
+          xctestrun="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type f -name 'IOSNext_*.xctestrun' -print -quit)"
+          test -f "$xctestrun"
+          plutil -p "$xctestrun" | grep -F 'IOSNextTests' >/dev/null
           xcodebuild test-without-building \
-            -project IOSNext.xcodeproj \
-            -scheme IOSNext \
+            -xctestrun "$xctestrun" \
             -destination "platform=iOS Simulator,id=$IOSNEXT_IPHONE_UDID" \
             -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
