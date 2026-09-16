@@ -14,6 +14,8 @@ xcrun simctl ui "$device_id" appearance light
 app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
 test -d "$app_path"
 xcrun simctl install "$device_id" "$app_path"
+data_container="$(xcrun simctl get_app_container "$device_id" "$APP_ID" data)"
+test -d "$data_container"
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR/stages"
@@ -24,11 +26,21 @@ capture_stage() {
   local temp="$OUT_DIR/stages/.candidate-$stage.png"
   local attempt
 
+  local marker="$data_container/tmp/iosnext-animation-stage-ready-$stage"
+
   for attempt in 1 2 3 4; do
-    rm -f "$temp"
+    rm -f "$temp" "$marker"
     xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
-    xcrun simctl launch "$device_id" "$APP_ID"       --animation-acceptance-mode "--animation-stage=$stage" >/tmp/iosnext-animation-launch.log
-    sleep "$attempt"
+    xcrun simctl launch "$device_id" "$APP_ID" \
+      --animation-acceptance-mode "--animation-stage=$stage" >/tmp/iosnext-animation-launch.log
+
+    for _ in {1..50}; do
+      test -f "$marker" && break
+      sleep 0.1
+    done
+    test -f "$marker" || continue
+
+    sleep 0.15
     xcrun simctl io "$device_id" screenshot "$temp" >/dev/null
 
     if xcrun swift Scripts/validate_visual_capture.swift "$temp"; then
@@ -71,5 +83,5 @@ stage_screenshots=$stage_count
 unique_stage_hashes=$unique_stage_hashes
 video_bytes=$video_bytes
 sequence=app-start,navigation,light-toggle,conditional,media-play-pause,slider,chat,owner-area
-capture_strategy=deterministic-stage-launch-plus-unblocked-video
+capture_strategy=app-ready-marker-plus-deterministic-stage-launch-plus-unblocked-video
 EOF

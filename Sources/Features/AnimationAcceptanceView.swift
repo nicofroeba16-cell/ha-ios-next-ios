@@ -70,6 +70,7 @@ struct AnimationAcceptanceView: View {
         .task {
             if let requestedStage {
                 configureSettledState(for: requestedStage)
+                await publishReadyMarker(for: requestedStage)
             } else {
                 await runSequence()
             }
@@ -248,6 +249,17 @@ struct AnimationAcceptanceView: View {
             chatText = requestedStage == .chat ? "Hallo aus dem Live-Test" : ""
             ownerUnlocked = requestedStage == .owner
         }
+    }
+
+    @MainActor
+    private func publishReadyMarker(for requestedStage: AnimationAcceptanceStage) async {
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(220))
+        await Task.yield()
+
+        let marker = FileManager.default.temporaryDirectory
+            .appending(path: "iosnext-animation-stage-ready-\(requestedStage.rawValue)")
+        try? Data("ready".utf8).write(to: marker, options: .atomic)
     }
 
     @MainActor

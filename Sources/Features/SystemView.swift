@@ -72,6 +72,7 @@ struct SystemView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .iosNextManagementBackground()
         .navigationTitle("Mehr")
         .fullScreenCover(isPresented: $isPresentingOwnerArea) {
             AdminAreaView()
@@ -97,6 +98,7 @@ private struct DiagnosticsView: View {
                 Label("Keine Home-Assistant-Konfiguration wird verändert.", systemImage: "checkmark.shield.fill")
             }
         }
+        .iosNextManagementBackground()
         .navigationTitle("Diagnose")
         .navigationBarTitleDisplayMode(.inline)
     }

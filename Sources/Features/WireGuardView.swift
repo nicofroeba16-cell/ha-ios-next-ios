@@ -65,6 +65,8 @@ struct WireGuardView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .iosNextManagementBackground()
         .navigationTitle("WireGuard")
         .navigationBarTitleDisplayMode(.inline)
         .privacySensitive()

@@ -63,18 +63,25 @@ struct AdminAreaView: View {
     private var content: some View {
         switch model.state {
         case .notConfigured:
-            ContentUnavailableView {
-                Label("Owner-Zugang nicht eingerichtet", systemImage: "person.badge.key.fill")
-            } description: {
-                Text("Die Einrichtung erfordert die HTTPS-Adresse des Admin-Backends und ein serverseitiges Owner-Token.")
-            } actions: {
-                Button("Owner-Zugang einrichten") { isPresentingConfiguration = true }
-                    .buttonStyle(.glassProminent)
+            ZStack {
+                IOSNextBackground()
+                ContentUnavailableView {
+                    Label("Owner-Zugang nicht eingerichtet", systemImage: "person.badge.key.fill")
+                } description: {
+                    Text("Die Einrichtung erfordert die HTTPS-Adresse des Admin-Backends und ein serverseitiges Owner-Token.")
+                } actions: {
+                    Button("Owner-Zugang einrichten") { isPresentingConfiguration = true }
+                        .buttonStyle(.glassProminent)
+                }
+                .padding(24)
             }
         case .locked:
             unlockView(message: "Der Bereich ist lokal gesperrt.")
         case .unlocking:
-            ProgressView("Owner-Berechtigung wird geprüft …")
+            ZStack {
+                IOSNextBackground()
+                ProgressView("Owner-Berechtigung wird geprüft …")
+            }
         case .unlocked:
             dashboard
         case let .failed(message):
@@ -146,7 +153,7 @@ struct AdminAreaView: View {
             Image(systemName: "faceid").foregroundStyle(.secondary)
         }
         .padding(18)
-        .iosNextCard()
+        .iosNextSurface()
     }
 
     private func statusSection(_ status: AdminBackendStatus) -> some View {
@@ -235,7 +242,7 @@ struct AdminAreaView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .iosNextCard()
+            .iosNextSurface()
         }
     }
 
@@ -250,7 +257,7 @@ struct AdminAreaView: View {
                 Text("Noch keine Audit-Ereignisse geladen.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 100)
-                    .iosNextCard()
+                    .iosNextSurface()
             } else {
                 VStack(spacing: 0) {
                     ForEach(model.auditEvents) { event in
@@ -273,7 +280,7 @@ struct AdminAreaView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .iosNextCard()
+                .iosNextSurface()
             }
         }
     }
@@ -324,6 +331,7 @@ private struct AdminConfigurationView: View {
                     }
                 }
             }
+            .iosNextManagementBackground()
             .navigationTitle("Owner einrichten")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

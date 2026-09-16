@@ -79,6 +79,15 @@ jobs:
           codesign -d --entitlements :- "$(dirname "$appex_info")" 2>&1 | tee packet-tunnel-entitlements.log
           codesign -v "$(dirname "$appex_info")"
 
+      - name: Verify compiled launch screen
+        run: |
+          set -euo pipefail
+          app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
+          test -d "$app_path"
+          test "$(plutil -extract UILaunchStoryboardName raw -o - "$app_path/Info.plist")" = "LaunchScreen"
+          test -d "$app_path/Base.lproj/LaunchScreen.storyboardc" -o -d "$app_path/LaunchScreen.storyboardc"
+          test -f "$app_path/Assets.car"
+
       - name: Run unit tests on iOS 27
         run: |
           set -o pipefail

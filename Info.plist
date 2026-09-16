@@ -31,11 +31,8 @@
     <string>iOS Next verwendet die Kamera für Fotos, die direkt im Arbeitsspeicher verschlüsselt werden.</string>
     <key>IOSNextWireGuardKeychainAccessGroup</key>
     <string>$(AppIdentifierPrefix)de.nicofroeba16.iosnext.shared</string>
-    <key>UILaunchScreen</key>
-    <dict>
-        <key>UIColorName</key>
-        <string>LaunchBackground</string>
-    </dict>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>

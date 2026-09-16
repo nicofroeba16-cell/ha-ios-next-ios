@@ -282,7 +282,7 @@ private struct IOSNextContentSurfaceModifier: ViewModifier {
 
         content
             .background {
-                shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
+                shape.fill(Color("ContentSurface"))
             }
             .overlay {
                 shape.strokeBorder(
@@ -308,6 +308,14 @@ private struct IOSNextFunctionalGlassModifier<S: Shape>: ViewModifier {
     }
 }
 
+private struct IOSNextManagementBackgroundModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(IOSNextBackground())
+    }
+}
+
 extension View {
     func iosNextSurface() -> some View {
         modifier(IOSNextContentSurfaceModifier())
@@ -319,5 +327,9 @@ extension View {
 
     func iosNextCard() -> some View {
         iosNextSurface()
+    }
+
+    func iosNextManagementBackground() -> some View {
+        modifier(IOSNextManagementBackgroundModifier())
     }
 }
