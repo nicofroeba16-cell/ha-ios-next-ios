@@ -264,26 +264,99 @@ struct AnimationAcceptanceView: View {
 
     @MainActor
     private func runSequence() async {
-        await sleep(900)
+        guard await checkpoint(.appStart) else { return }
+
+        await sleep(350)
         stage = .navigation
-        for index in 1...3 { await sleep(420); navSelection = index }
-        await sleep(650); stage = .lightToggle
-        await sleep(480); lightOn = true
-        await sleep(650); stage = .conditional
-        await sleep(480); conditionalVisible = true
-        await sleep(650); stage = .media
-        await sleep(480); mediaPlaying = true
-        await sleep(420); mediaPlaying = false
-        await sleep(650); stage = .slider
+        for index in 1...3 {
+            await sleep(420)
+            navSelection = index
+        }
+        await sleep(250)
+        guard await checkpoint(.navigation) else { return }
+
+        await sleep(350)
+        stage = .lightToggle
+        await sleep(480)
+        lightOn = true
+        await sleep(250)
+        guard await checkpoint(.lightToggle) else { return }
+
+        await sleep(350)
+        stage = .conditional
+        await sleep(480)
+        conditionalVisible = true
+        await sleep(250)
+        guard await checkpoint(.conditional) else { return }
+
+        await sleep(350)
+        stage = .media
+        await sleep(480)
+        mediaPlaying = true
+        await sleep(250)
+        guard await checkpoint(.media) else { return }
+        await sleep(420)
+        mediaPlaying = false
+
+        await sleep(350)
+        stage = .slider
         for value in stride(from: 0.15, through: 0.88, by: 0.073) {
-            await sleep(90); sliderValue = value
+            await sleep(90)
+            sliderValue = value
         }
-        await sleep(600); stage = .chat
+        await sleep(250)
+        guard await checkpoint(.slider) else { return }
+
+        await sleep(350)
+        stage = .chat
         for character in "Hallo aus dem Live-Test" {
-            await sleep(55); chatText.append(character)
+            await sleep(55)
+            chatText.append(character)
         }
-        await sleep(650); stage = .owner
-        await sleep(550); ownerUnlocked = true
+        await sleep(250)
+        guard await checkpoint(.chat) else { return }
+
+        await sleep(350)
+        stage = .owner
+        await sleep(550)
+        ownerUnlocked = true
+        await sleep(250)
+        guard await checkpoint(.owner) else { return }
+
+        let marker = FileManager.default.temporaryDirectory
+            .appending(path: "iosnext-animation-sequence-complete")
+        try? Data("complete".utf8).write(to: marker, options: .atomic)
+    }
+
+    @MainActor
+    private func checkpoint(_ currentStage: AnimationAcceptanceStage) async -> Bool {
+        await Task.yield()
+
+        let directory = FileManager.default.temporaryDirectory
+        let ready = directory.appending(path: "iosnext-animation-stage-ready-\(currentStage.rawValue)")
+        let captured = directory.appending(path: "iosnext-animation-stage-captured-\(currentStage.rawValue)")
+        let timedOut = directory.appending(path: "iosnext-animation-stage-timeout-\(currentStage.rawValue)")
+
+        try? FileManager.default.removeItem(at: ready)
+        try? FileManager.default.removeItem(at: captured)
+        try? FileManager.default.removeItem(at: timedOut)
+
+        do {
+            try Data("ready".utf8).write(to: ready, options: .atomic)
+        } catch {
+            return false
+        }
+
+        for _ in 0..<800 {
+            if FileManager.default.fileExists(atPath: captured.path) {
+                try? FileManager.default.removeItem(at: captured)
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+
+        try? Data("timeout".utf8).write(to: timedOut, options: .atomic)
+        return false
     }
 
     private func sleep(_ milliseconds: UInt64) async {
