@@ -4,6 +4,8 @@ set -euo pipefail
 DEVICE_NAME="${DEVICE_NAME:-iPhone 17 Pro}"
 APP_ID="de.nicofroeba16.iosnext"
 OUT_DIR="${OUT_DIR:-DarkVisualAcceptance}"
+MAX_CAPTURE_ATTEMPTS="${MAX_CAPTURE_ATTEMPTS:-4}"
+record_pid=""
 
 device_id="$(DEVICE_NAME="$DEVICE_NAME" xcrun simctl list devices available -j | DEVICE_NAME="$DEVICE_NAME" python3 -c 'import json,os,sys; name=os.environ["DEVICE_NAME"]; data=json.load(sys.stdin); print(next(device["udid"] for devices in data["devices"].values() for device in devices if device.get("isAvailable", True) and device["name"] == name))')"
 test -n "$device_id"
@@ -11,55 +13,103 @@ test -n "$device_id"
 xcrun simctl boot "$device_id" 2>/dev/null || true
 xcrun simctl bootstatus "$device_id" -b
 
-# Standard accessibility state + system Dark appearance.
-xcrun simctl ui "$device_id" appearance dark
-xcrun simctl ui "$device_id" content_size large
-xcrun simctl ui "$device_id" increase_contrast disabled
-xcrun simctl spawn "$device_id" defaults write com.apple.Accessibility ReduceMotionEnabled -bool false
-xcrun simctl spawn "$device_id" defaults write com.apple.Accessibility ReduceTransparencyEnabled -bool false
-xcrun simctl spawn "$device_id" notifyutil -p com.apple.Accessibility.ReduceMotionStatusDidChange || true
-xcrun simctl spawn "$device_id" notifyutil -p com.apple.Accessibility.ReduceTransparencyStatusDidChange || true
-
-app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
+app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print | head -n 1)"
 test -d "$app_path"
 
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR/product-screens" "$OUT_DIR/logs"
+
+stop_recording() {
+  if [ -n "$record_pid" ]; then
+    kill -INT "$record_pid" 2>/dev/null || true
+    wait "$record_pid" 2>/dev/null || true
+    record_pid=""
+  fi
+}
+trap stop_recording EXIT
+
+set_visual_baseline() {
+  xcrun simctl ui "$device_id" appearance dark
+  xcrun simctl ui "$device_id" content_size large
+  xcrun simctl ui "$device_id" increase_contrast disabled
+  xcrun simctl spawn "$device_id" defaults write com.apple.Accessibility ReduceMotionEnabled -bool false
+  xcrun simctl spawn "$device_id" defaults write com.apple.Accessibility ReduceTransparencyEnabled -bool false
+  xcrun simctl spawn "$device_id" notifyutil -p com.apple.Accessibility.ReduceMotionStatusDidChange || true
+  xcrun simctl spawn "$device_id" notifyutil -p com.apple.Accessibility.ReduceTransparencyStatusDidChange || true
+
+  local state=""
+  for _ in {1..40}; do
+    state="$(xcrun simctl ui "$device_id" appearance 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+    if [[ "$state" == *dark* ]]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "Dark appearance failed to settle: $state" >&2
+  return 1
+}
+
+restart_simulator() {
+  stop_recording
+  xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
+  xcrun simctl shutdown "$device_id" 2>/dev/null || true
+  xcrun simctl boot "$device_id"
+  xcrun simctl bootstatus "$device_id" -b
+  set_visual_baseline
+  data_container="$(xcrun simctl get_app_container "$device_id" "$APP_ID" data)"
+  test -d "$data_container"
+}
+
+set_visual_baseline
 xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
 xcrun simctl uninstall "$device_id" "$APP_ID" 2>/dev/null || true
 xcrun simctl install "$device_id" "$app_path"
 data_container="$(xcrun simctl get_app_container "$device_id" "$APP_ID" data)"
 test -d "$data_container"
 
-rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR/product-screens" "$OUT_DIR/logs"
-
 capture_product_screen() {
   local screen="$1"
   local destination="$OUT_DIR/product-screens/$screen.png"
-  local temp="$OUT_DIR/product-screens/.$screen-candidate.png"
-  local marker="$data_container/tmp/iosnext-product-screen-ready-$screen"
-  local attempt
+  local attempt nonce marker candidate validation_log launch_log
 
-  for attempt in 1 2 3 4; do
-    rm -f "$temp" "$marker"
+  rm -f "$destination"
+
+  for attempt in $(seq 1 "$MAX_CAPTURE_ATTEMPTS"); do
+    nonce="dark-$screen-$attempt-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    marker="$data_container/tmp/iosnext-product-screen-ready-$screen-dark-$nonce"
+    candidate="$OUT_DIR/logs/$screen-attempt-$attempt.png"
+    validation_log="$OUT_DIR/logs/$screen-attempt-$attempt-validation.log"
+    launch_log="$OUT_DIR/logs/$screen-attempt-$attempt-launch.log"
+
+    rm -f "$candidate" "$marker" "$validation_log" "$launch_log"
     xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
-    if ! xcrun simctl launch "$device_id" "$APP_ID" \
-      "--product-ui-test-screen=$screen" \
-      --product-ui-test-dark \
-      >"$OUT_DIR/logs/$screen-attempt-$attempt.log" 2>&1; then
-      continue
+
+    if ! xcrun simctl launch "$device_id" "$APP_ID"       "--product-ui-test-screen=$screen"       --product-ui-test-dark       "--visual-ready-nonce=$nonce"       >"$launch_log" 2>&1; then
+      echo "Launch failed for $screen attempt $attempt" >>"$launch_log"
+    else
+      ready=0
+      for _ in {1..80}; do
+        if [ -f "$marker" ]; then
+          ready=1
+          break
+        fi
+        sleep 0.1
+      done
+
+      if [ "$ready" -eq 1 ]; then
+        sleep 0.20
+        xcrun simctl io "$device_id" screenshot "$candidate" >/dev/null
+        if xcrun swift Scripts/validate_visual_capture.swift "$candidate" >"$validation_log" 2>&1; then
+          cp "$candidate" "$destination"
+          return 0
+        fi
+      else
+        echo "ready marker timeout: $marker" >"$validation_log"
+      fi
     fi
 
-    for _ in {1..60}; do
-      test -f "$marker" && break
-      sleep 0.1
-    done
-    test -f "$marker" || continue
-
-    sleep 0.15
-    xcrun simctl io "$device_id" screenshot "$temp" >/dev/null
-    if xcrun swift Scripts/validate_visual_capture.swift "$temp"; then
-      mv "$temp" "$destination"
-      return 0
+    if [ "$attempt" -eq 2 ]; then
+      restart_simulator
     fi
   done
 
@@ -71,28 +121,49 @@ for screen in home rooms chat media system light media-detail owner wireguard; d
   capture_product_screen "$screen"
 done
 
-# Record a real cold launch with no acceptance/test screen arguments.
-xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
-cold_video="$OUT_DIR/cold-launch-dark.mp4"
-xcrun simctl io "$device_id" recordVideo --codec=h264 "$cold_video" >/tmp/iosnext-dark-cold-record.log 2>&1 &
-record_pid=$!
-sleep 0.75
-xcrun simctl launch "$device_id" "$APP_ID" >/tmp/iosnext-dark-cold-launch.log
-sleep 6
-kill -INT "$record_pid" 2>/dev/null || true
-wait "$record_pid" 2>/dev/null || true
-test -s "$cold_video"
+record_cold_launch() {
+  local video="$OUT_DIR/cold-launch-dark.mp4"
+  local attempt bytes
 
-# Record the deterministic in-app interaction sequence in Dark Mode.
-APPEARANCE=dark \
-OUT_DIR="$OUT_DIR/animation" \
-DEVICE_NAME="$DEVICE_NAME" \
-bash Scripts/run_animation_acceptance.sh
+  for attempt in 1 2 3; do
+    rm -f "$video"
+    xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
+
+    xcrun simctl io "$device_id" recordVideo --codec=h264 "$video"       >"$OUT_DIR/logs/cold-launch-attempt-$attempt-record.log" 2>&1 &
+    record_pid=$!
+    sleep 0.35
+
+    if ! xcrun simctl launch "$device_id" "$APP_ID"       >"$OUT_DIR/logs/cold-launch-attempt-$attempt-launch.log" 2>&1; then
+      stop_recording
+      continue
+    fi
+
+    sleep 6
+    stop_recording
+
+    if [ -s "$video" ]; then
+      bytes="$(stat -f%z "$video")"
+      if [ "$bytes" -gt 50000 ]; then
+        echo "$bytes"
+        return 0
+      fi
+    fi
+
+    if [ "$attempt" -eq 2 ]; then
+      restart_simulator
+    fi
+  done
+
+  echo "Unable to record a valid cold-launch video" >&2
+  return 1
+}
+
+cold_bytes="$(record_cold_launch)"
 
 screen_count="$(find "$OUT_DIR/product-screens" -name '*.png' | wc -l | tr -d ' ')"
 test "$screen_count" -eq 9
-cold_bytes="$(stat -f%z "$cold_video")"
-animation_bytes="$(stat -f%z "$OUT_DIR/animation/animation-acceptance.mp4")"
+unique_screen_hashes="$(shasum -a 256 "$OUT_DIR"/product-screens/*.png | awk '{print $1}' | sort -u | wc -l | tr -d ' ')"
+test "$unique_screen_hashes" -eq 9
 
 cat > "$OUT_DIR/summary.txt" <<EOF
 iOS Next Dark Visual Acceptance
@@ -103,9 +174,11 @@ increase_contrast=disabled
 reduce_motion=false
 reduce_transparency=false
 product_screens=$screen_count
+unique_product_screen_hashes=$unique_screen_hashes
 cold_launch_video_bytes=$cold_bytes
-animation_video_bytes=$animation_bytes
 normal_launch_has_test_arguments=false
-product_capture_uses_deterministic_preview=true
-animation_capture_uses_acceptance_mode=true
+product_capture_uses_nonce_ready_marker=true
+product_capture_validates_each_attempt=true
+simulator_restart_after_repeated_capture_failure=true
+interaction_animation_recorded_here=false
 EOF
