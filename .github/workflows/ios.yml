@@ -53,16 +53,36 @@ jobs:
           expected_files=$'Package.swift\nSources/WireGuardKitC/WireGuardKitC.h'
           test "$(git -C "$checkout" diff --name-only)" = "$expected_files"
           git -C "$checkout" diff --check
-      - name: Build and test on iOS 27
+      - name: Build for testing on iOS 27
         run: |
           set -o pipefail
-          xcodebuild test \
+          xcodebuild build-for-testing \
+            -project IOSNext.xcodeproj \
+            -scheme IOSNext \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            | tee xcodebuild.log
+
+      - name: Verify built packet tunnel metadata
+        run: |
+          set -euo pipefail
+          appex_info="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Debug-iphonesimulator/IOSNextPacketTunnel.appex/Info.plist' -print -quit)"
+          test -f "$appex_info"
+          echo "Built extension plist: $appex_info"
+          plutil -p "$appex_info"
+          test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$appex_info")" = "com.apple.networkextension.packet-tunnel"
+          test -n "$(plutil -extract NSExtension.NSExtensionPrincipalClass raw -o - "$appex_info")"
+          codesign -d --entitlements :- "$(dirname "$appex_info")" 2>&1 | tee packet-tunnel-entitlements.log
+          codesign -v "$(dirname "$appex_info")"
+
+      - name: Run tests on iOS 27
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
             -resultBundlePath TestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
-            | tee xcodebuild.log
+            | tee -a xcodebuild.log
       - name: Capture live HA card catalog screenshots
         if: success()
         run: |
@@ -90,5 +110,6 @@ jobs:
           retention-days: 14
           path: |
             xcodebuild.log
+            packet-tunnel-entitlements.log
             TestResults.xcresult
             CardScreenshots
