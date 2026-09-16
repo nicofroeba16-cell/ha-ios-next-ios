@@ -6,6 +6,14 @@ SCHEME="IOSNext"
 IPHONE_NAME="iPhone 17 Pro"
 OUT_DIR="UIAcceptance"
 
+if [ -n "${XCTESTRUN_PATH:-}" ] && [ -f "$XCTESTRUN_PATH" ]; then
+  test_run_args=(-xctestrun "$XCTESTRUN_PATH")
+  test_run_source="xctestrun:$XCTESTRUN_PATH"
+else
+  test_run_args=(-project "$PROJECT" -scheme "$SCHEME")
+  test_run_source="project-scheme-fallback"
+fi
+
 rm -rf "$OUT_DIR" UITestResults-iPhone.xcresult UITestResults-iPad.xcresult
 mkdir -p "$OUT_DIR"
 
@@ -17,7 +25,10 @@ test -n "$iphone_id"
 test -n "$ipad_id"
 iphone_booted=0
 ipad_booted=0
-printf 'iphone=%s\nipad=%s\n' "$iphone_id" "$ipad_id" | tee "$OUT_DIR/devices.txt"
+{
+  printf 'iphone=%s\nipad=%s\n' "$iphone_id" "$ipad_id"
+  printf 'test_run_source=%s\n' "$test_run_source"
+} | tee "$OUT_DIR/devices.txt"
 
 xcrun simctl help ui 2>&1 | tee "$OUT_DIR/simctl-ui-help.txt"
 
@@ -81,8 +92,7 @@ run_accessibility_variant() {
   xcrun simctl terminate "$iphone_id" de.nicofroeba16.iosnext 2>/dev/null || true
   rm -rf "$OUT_DIR/$name.xcresult"
   xcodebuild test-without-building \
-    -project "$PROJECT" \
-    -scheme "$SCHEME" \
+    "${test_run_args[@]}" \
     -destination "platform=iOS Simulator,id=$iphone_id" \
     "-only-testing:IOSNextUITests/IOSNextUITests/$test_name" \
     -resultBundlePath "$OUT_DIR/$name.xcresult" \
@@ -96,8 +106,7 @@ reset_accessibility "$iphone_id"
 xcrun simctl terminate "$iphone_id" de.nicofroeba16.iosnext 2>/dev/null || true
 
 xcodebuild test-without-building \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
+  "${test_run_args[@]}" \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -only-testing:IOSNextUITests \
   -skip-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
@@ -127,8 +136,7 @@ reset_accessibility "$ipad_id"
 xcrun simctl terminate "$ipad_id" de.nicofroeba16.iosnext 2>/dev/null || true
 
 xcodebuild test-without-building \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
+  "${test_run_args[@]}" \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -only-testing:IOSNextUITests/IOSNextUITests/testPrimaryProductScreensRenderLightAndDark \
   -only-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
