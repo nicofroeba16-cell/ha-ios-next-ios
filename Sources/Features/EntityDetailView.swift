@@ -84,6 +84,7 @@ private struct LightDetailView: View {
                         Task { await appModel.setBrightness(brightness, for: entity) }
                     }
                     .disabled(!entity.isAvailable)
+                    .accessibilityIdentifier("light-brightness-slider")
                     .accessibilityValue("\(Int(brightness * 100)) Prozent")
                 }
                 .padding(20)
@@ -97,6 +98,7 @@ private struct LightDetailView: View {
                 .buttonStyle(.glassProminent)
                 .buttonBorderShape(.capsule)
                 .disabled(!entity.isAvailable || appModel.activeActionEntityIDs.contains(entity.entityID))
+                .accessibilityIdentifier("light-power-button")
             }
         }
         .onAppear { brightness = entity.brightness ?? (entity.isOn ? 1 : 0.5) }

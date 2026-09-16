@@ -33,7 +33,13 @@ struct AppShellView: View {
     let appModel: AppModel
     let chatModel: ChatModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var selectedTab: AppTab? = .home
+    @State private var selectedTab: AppTab?
+
+    init(appModel: AppModel, chatModel: ChatModel, initialTab: AppTab = .home) {
+        self.appModel = appModel
+        self.chatModel = chatModel
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         Group {

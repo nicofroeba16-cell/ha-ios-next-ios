@@ -54,3 +54,37 @@ extension AppModel {
         return model
     }
 }
+
+
+extension ChatModel {
+    static var preview: ChatModel {
+        let model = ChatModel()
+        model.state = .online
+        model.recipientUserID = "Mika"
+        model.ownSafetyNumber = "4821 7750 1904 3382"
+        model.recipientSafetyNumbers = ["9550 2711 6842 1290"]
+        model.messages = [
+            ChatMessage(
+                id: "preview-incoming",
+                senderUserID: "Mika",
+                kind: .text,
+                contentType: "text/plain; charset=utf-8",
+                data: Data("Bin gleich da 👋".utf8),
+                createdAt: Date(timeIntervalSince1970: 1_789_553_100),
+                direction: .incoming,
+                delivery: .received
+            ),
+            ChatMessage(
+                id: "preview-outgoing",
+                senderUserID: "Timo",
+                kind: .text,
+                contentType: "text/plain; charset=utf-8",
+                data: Data("Perfekt, bis gleich.".utf8),
+                createdAt: Date(timeIntervalSince1970: 1_789_553_160),
+                direction: .outgoing,
+                delivery: .received
+            )
+        ]
+        return model
+    }
+}

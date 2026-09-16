@@ -31,6 +31,7 @@ struct MediaView: View {
                             mediaCard(player)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("media-player-link-\(player.entityID)")
                     }
                 }
             }

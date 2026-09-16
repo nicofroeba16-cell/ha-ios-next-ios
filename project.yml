@@ -40,6 +40,10 @@ targets:
       - target: IOSNextPacketTunnel
         embed: true
         link: false
+    scheme:
+      testTargets:
+        - IOSNextTests
+        - IOSNextUITests
   WireGuardGoBridgeiOS:
     type: ""
     platform: iOS
@@ -87,3 +91,16 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+
+  IOSNextUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: IOSNext
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: de.nicofroeba16.iosnext.uitests
+        TEST_TARGET_NAME: IOSNext

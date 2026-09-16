@@ -79,14 +79,25 @@ jobs:
           codesign -d --entitlements :- "$(dirname "$appex_info")" 2>&1 | tee packet-tunnel-entitlements.log
           codesign -v "$(dirname "$appex_info")"
 
-      - name: Run tests on iOS 27
+      - name: Run unit tests on iOS 27
         run: |
           set -o pipefail
           xcodebuild test-without-building \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
+            | tee -a xcodebuild.log
+      - name: Run real product UI acceptance tests
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project IOSNext.xcodeproj \
+            -scheme IOSNext \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -only-testing:IOSNextUITests \
+            -resultBundlePath UITestResults.xcresult \
             | tee -a xcodebuild.log
       - name: Capture and validate live HA card catalog
         if: success()
@@ -105,5 +116,6 @@ jobs:
             xcodebuild.log
             packet-tunnel-entitlements.log
             TestResults.xcresult
+            UITestResults.xcresult
             CardScreenshots
             AnimationAcceptance

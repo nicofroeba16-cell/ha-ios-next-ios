@@ -6,6 +6,7 @@ on:
     paths:
       - "Sources/**"
       - "Tests/**"
+      - "UITests/**"
       - "WireGuard/**"
       - "Backend/**"
       - "Scripts/**"
@@ -92,5 +93,6 @@ jobs:
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -only-testing:IOSNextTests \
             -resultBundlePath FastTestResults.xcresult \
             | tee -a xcodebuild-fast.log

@@ -194,6 +194,7 @@ struct ChatView: View {
             .disabled(chatModel.state != .online)
 
             TextField("Nachricht", text: Bindable(chatModel).draft, axis: .vertical)
+                .accessibilityIdentifier("chat-composer-field")
                 .lineLimit(1...5)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)

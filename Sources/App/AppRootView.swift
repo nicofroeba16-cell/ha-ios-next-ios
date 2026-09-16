@@ -7,7 +7,9 @@ struct AppRootView: View {
 
     var body: some View {
         Group {
-            if isAnimationAcceptanceMode {
+            if isProductAcceptanceMode {
+                ProductAcceptanceRootView()
+            } else if isAnimationAcceptanceMode {
                 AnimationAcceptanceView()
             } else if isLiveCardTestMode {
                 LiveHACardTestModeView()
@@ -31,7 +33,7 @@ struct AppRootView: View {
         }
         .animation(IOSNextMotion.navigation, value: appModel.isConnected)
         .task {
-            if !isLiveCardTestMode && !isAnimationAcceptanceMode {
+            if !isLiveCardTestMode && !isAnimationAcceptanceMode && !isProductAcceptanceMode {
                 await appModel.restoreConnection()
             }
         }
@@ -51,6 +53,10 @@ struct AppRootView: View {
 
     private var isAnimationAcceptanceMode: Bool {
         ProcessInfo.processInfo.arguments.contains("--animation-acceptance-mode")
+    }
+
+    private var isProductAcceptanceMode: Bool {
+        ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("--product-ui-test-screen=") }
     }
 
     private var reconnectBanner: some View {
