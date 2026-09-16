@@ -116,10 +116,41 @@ final class IOSNextUITests: XCTestCase {
         attachScreenshot("product-wireguard-entry", app: application)
     }
 
+    private func accessibilityState(in application: XCUIApplication) -> String {
+        let probe = application.staticTexts["accessibility-state-probe"].firstMatch
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        return probe.value as? String ?? ""
+    }
+
     func testAccessibilityCoreScreenRenders() {
         let application = launch("home")
         XCTAssertTrue(application.staticTexts["Favoriten"].waitForExistence(timeout: 3))
+        _ = accessibilityState(in: application)
         attachScreenshot("product-accessibility-current-system-settings", app: application)
+    }
+
+    func testDynamicTypeAccessibilityState() {
+        let application = launch("home")
+        XCTAssertTrue(accessibilityState(in: application).contains("dynamicTypeAccessibility=true"))
+        attachScreenshot("product-accessibility-dynamic-type-xxxl", app: application)
+    }
+
+    func testReduceMotionAccessibilityState() {
+        let application = launch("home")
+        XCTAssertTrue(accessibilityState(in: application).contains("reduceMotion=true"))
+        attachScreenshot("product-accessibility-reduce-motion", app: application)
+    }
+
+    func testReduceTransparencyAccessibilityState() {
+        let application = launch("home")
+        XCTAssertTrue(accessibilityState(in: application).contains("reduceTransparency=true"))
+        attachScreenshot("product-accessibility-reduce-transparency", app: application)
+    }
+
+    func testIncreaseContrastAccessibilityState() {
+        let application = launch("home")
+        XCTAssertTrue(accessibilityState(in: application).contains("increasedContrast=true"))
+        attachScreenshot("product-accessibility-increase-contrast", app: application)
     }
 
     func testIPadPortraitLandscapeCoreScreens() {

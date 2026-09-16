@@ -17,28 +17,58 @@ test -n "$iphone_id"
 test -n "$ipad_id"
 printf 'iphone=%s\nipad=%s\n' "$iphone_id" "$ipad_id" | tee "$OUT_DIR/devices.txt"
 
-xcrun simctl help ui | tee "$OUT_DIR/simctl-ui-help.txt"
+xcrun simctl help ui 2>&1 | tee "$OUT_DIR/simctl-ui-help.txt"
+
+set_reduce_motion() {
+  local device="$1"
+  local value="$2"
+  xcrun simctl spawn "$device" defaults write com.apple.Accessibility ReduceMotionEnabled -bool "$value"
+  xcrun simctl spawn "$device" notifyutil -p com.apple.Accessibility.ReduceMotionStatusDidChange || true
+}
+
+set_reduce_transparency() {
+  local device="$1"
+  local value="$2"
+  xcrun simctl spawn "$device" defaults write com.apple.Accessibility ReduceTransparencyEnabled -bool "$value"
+  xcrun simctl spawn "$device" notifyutil -p com.apple.Accessibility.ReduceTransparencyStatusDidChange || true
+}
 
 reset_accessibility() {
   local device="$1"
   xcrun simctl ui "$device" appearance light
   xcrun simctl ui "$device" content_size large
   xcrun simctl ui "$device" increase_contrast disabled
-  xcrun simctl ui "$device" reduce_motion disabled
-  xcrun simctl ui "$device" reduce_transparency disabled
+  set_reduce_motion "$device" false
+  set_reduce_transparency "$device" false
+}
+
+record_accessibility_state() {
+  local device="$1"
+  local name="$2"
+  {
+    echo "appearance=$(xcrun simctl ui "$device" appearance)"
+    echo "content_size=$(xcrun simctl ui "$device" content_size)"
+    echo "increase_contrast=$(xcrun simctl ui "$device" increase_contrast)"
+    echo "reduce_motion=$(xcrun simctl spawn "$device" defaults read com.apple.Accessibility ReduceMotionEnabled)"
+    echo "reduce_transparency=$(xcrun simctl spawn "$device" defaults read com.apple.Accessibility ReduceTransparencyEnabled)"
+  } | tee "$OUT_DIR/$name-settings.txt"
 }
 
 run_accessibility_variant() {
   local name="$1"
-  shift
+  local test_name="$2"
+  shift 2
+
   reset_accessibility "$iphone_id"
   "$@"
+  record_accessibility_state "$iphone_id" "$name"
+
   rm -rf "$OUT_DIR/$name.xcresult"
   xcodebuild test-without-building \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "platform=iOS Simulator,id=$iphone_id" \
-    -only-testing:IOSNextUITests/testAccessibilityCoreScreenRenders \
+    "-only-testing:IOSNextUITests/$test_name" \
     -resultBundlePath "$OUT_DIR/$name.xcresult" \
     | tee -a xcodebuild.log
 }
@@ -54,16 +84,20 @@ xcodebuild test-without-building \
   -only-testing:IOSNextUITests \
   -skip-testing:IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
   -skip-testing:IOSNextUITests/testAccessibilityCoreScreenRenders \
+  -skip-testing:IOSNextUITests/testDynamicTypeAccessibilityState \
+  -skip-testing:IOSNextUITests/testReduceMotionAccessibilityState \
+  -skip-testing:IOSNextUITests/testReduceTransparencyAccessibilityState \
+  -skip-testing:IOSNextUITests/testIncreaseContrastAccessibilityState \
   -resultBundlePath UITestResults-iPhone.xcresult \
   | tee -a xcodebuild.log
 
-run_accessibility_variant dynamic-type-xxxl \
+run_accessibility_variant dynamic-type-xxxl testDynamicTypeAccessibilityState \
   xcrun simctl ui "$iphone_id" content_size accessibility-extra-extra-extra-large
-run_accessibility_variant reduce-motion \
-  xcrun simctl ui "$iphone_id" reduce_motion enabled
-run_accessibility_variant reduce-transparency \
-  xcrun simctl ui "$iphone_id" reduce_transparency enabled
-run_accessibility_variant increase-contrast \
+run_accessibility_variant reduce-motion testReduceMotionAccessibilityState \
+  set_reduce_motion "$iphone_id" true
+run_accessibility_variant reduce-transparency testReduceTransparencyAccessibilityState \
+  set_reduce_transparency "$iphone_id" true
+run_accessibility_variant increase-contrast testIncreaseContrastAccessibilityState \
   xcrun simctl ui "$iphone_id" increase_contrast enabled
 
 reset_accessibility "$iphone_id"

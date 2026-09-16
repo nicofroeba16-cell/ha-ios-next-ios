@@ -31,6 +31,11 @@ private struct ProductAcceptanceOptions {
 }
 
 struct ProductAcceptanceRootView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private let screen: ProductAcceptanceScreen
     private let options: ProductAcceptanceOptions
     @State private var appModel = AppModel.preview
