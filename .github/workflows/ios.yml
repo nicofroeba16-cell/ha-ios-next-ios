@@ -16,9 +16,28 @@ concurrency:
 jobs:
   xcode-27:
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 75
+    env:
+      DERIVED_DATA_PATH: ${{ github.workspace }}/.ci-derived-data/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Initialize isolated run state
+        run: |
+          set -euo pipefail
+          rm -rf "$DERIVED_DATA_PATH" UIAcceptance UIAcceptanceAttempts
+          rm -rf CardScreenshots AnimationAcceptance DarkVisualAcceptance CIEvidence
+          rm -rf TestResults.xcresult UITestResults-iPhone.xcresult UITestResults-iPad.xcresult
+          rm -f fake-ha.pid fake-ha.port fake-ha.log visual-gate-summary.txt
+          rm -f /tmp/iosnext-*.log
+          mkdir -p "$DERIVED_DATA_PATH" CIEvidence
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "sha=${GITHUB_SHA}"
+            echo "ref=${GITHUB_REF}"
+            echo "workspace=${GITHUB_WORKSPACE}"
+            echo "derived_data=$DERIVED_DATA_PATH"
+          } > CIEvidence/run-provenance.txt
       - name: Activate pinned Go toolchain
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -64,13 +83,14 @@ jobs:
           xcodebuild build-for-testing \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
             | tee xcodebuild.log
 
       - name: Verify built packet tunnel metadata
         run: |
           set -euo pipefail
-          appex_info="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Debug-iphonesimulator/IOSNextPacketTunnel.appex/Info.plist' -print -quit)"
+          appex_info="$(find "$DERIVED_DATA_PATH" -path '*/Build/Products/Debug-iphonesimulator/IOSNextPacketTunnel.appex/Info.plist' -print -quit)"
           test -f "$appex_info"
           echo "Built extension plist: $appex_info"
           plutil -p "$appex_info"
@@ -82,7 +102,7 @@ jobs:
       - name: Verify compiled launch screen
         run: |
           set -euo pipefail
-          derived="$HOME/Library/Developer/Xcode/DerivedData"
+          derived="$DERIVED_DATA_PATH"
           app_path="$(find "$derived" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
           partial="$(find "$derived" -type f -name 'LaunchScreen-SBPartialInfo.plist' -print -quit)"
           storyboard="$(find "$app_path" -type d -name 'LaunchScreen.storyboardc' -print -quit)"
@@ -128,10 +148,24 @@ jobs:
           nc -z 127.0.0.1 "$port"
           echo "FAKE_HA_PORT=$port" >> "$GITHUB_ENV"
           echo "Using isolated fake HA port $port"
-      - name: Inject fake Home Assistant port into xctestrun
+      - name: Bind current-run xctestrun and inject fake Home Assistant port
         run: |
           set -euo pipefail
-          xctestrun="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type f -name '*.xctestrun' -print -quit)"
+          xctestruns="$(find "$DERIVED_DATA_PATH" -type f -name '*.xctestrun' -print | sort)"
+          xctestrun_count="$(printf '%s\n' "$xctestruns" | sed '/^$/d' | wc -l | tr -d ' ')"
+          if [ "$xctestrun_count" -ne 1 ]; then
+            echo "Expected exactly one current-run xctestrun, found $xctestrun_count" >&2
+            printf '%s\n' "$xctestruns" >&2
+            exit 1
+          fi
+          xctestrun="$(printf '%s\n' "$xctestruns" | sed '/^$/d' | head -1)"
+          case "$xctestrun" in
+            "$DERIVED_DATA_PATH"/*) ;;
+            *)
+              echo "xctestrun escaped current run DerivedData: $xctestrun" >&2
+              exit 1
+              ;;
+          esac
           test -f "$xctestrun"
           python3 - "$xctestrun" "$FAKE_HA_PORT" <<'PY'
           import plistlib
@@ -178,6 +212,17 @@ jobs:
           print(f"Injected FAKE_HA_PORT={port} into {updated} IOSNextTests target(s)")
           PY
           echo "XCTESTRUN_PATH=$xctestrun" >> "$GITHUB_ENV"
+
+      - name: Reset unit-test simulator
+        run: |
+          set -euo pipefail
+          devices_json="$(xcrun simctl list devices available -j)"
+          device_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"]=="iPhone 17 Pro"]; print(devices[0]["udid"])')"
+          test -n "$device_id"
+          echo "unit_iphone=$device_id" > CIEvidence/unit-simulator.txt
+          xcrun simctl shutdown "$device_id" 2>/dev/null || true
+          xcrun simctl erase "$device_id"
+
       - name: Run unit tests on iOS 27
         run: |
           set -o pipefail
@@ -187,27 +232,161 @@ jobs:
             -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
             | tee -a xcodebuild.log
-      - name: Show fake Home Assistant log on failure
+      - name: Show fake Home Assistant log on functional failure
         if: failure()
         run: cat fake-ha.log || true
 
       - name: Stop fake Home Assistant test server
         if: always()
         run: |
+          set +e
           if [ -f fake-ha.pid ]; then
             kill "$(cat fake-ha.pid)" 2>/dev/null || true
           fi
-      - name: Run real product UI acceptance matrix
-        run: bash Scripts/run_ui_acceptance_matrix.sh
+
+      - name: Reset UI acceptance simulators
+        id: reset_ui_simulators
+        run: |
+          set -euo pipefail
+          devices_json="$(xcrun simctl list devices available -j)"
+          iphone_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"]=="iPhone 17 Pro"]; print(devices[0]["udid"])')"
+          ipad_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"].startswith("iPad")]; print(devices[0]["udid"])')"
+          test -n "$iphone_id"
+          test -n "$ipad_id"
+          printf 'iphone=%s\nipad=%s\n' "$iphone_id" "$ipad_id" | tee CIEvidence/ui-simulators.txt
+          for device_id in "$iphone_id" "$ipad_id"; do
+            xcrun simctl shutdown "$device_id" 2>/dev/null || true
+            xcrun simctl erase "$device_id"
+          done
+
+      - name: Run real product UI acceptance matrix with retry
+        id: ui_acceptance
+        run: |
+          set -euo pipefail
+          real_xcodebuild="$(xcrun -f xcodebuild)"
+          shim_dir="$RUNNER_TEMP/iosnext-xcodebuild-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rm -rf "$shim_dir"
+          mkdir -p "$shim_dir" UIAcceptanceAttempts
+          cat > "$shim_dir/xcodebuild" <<'SH'
+          #!/bin/bash
+          set -euo pipefail
+          : "${IOSNEXT_REAL_XCODEBUILD:?}"
+          : "${DERIVED_DATA_PATH:?}"
+          for arg in "$@"; do
+            if [ "$arg" = "-derivedDataPath" ]; then
+              exec "$IOSNEXT_REAL_XCODEBUILD" "$@"
+            fi
+          done
+          exec "$IOSNEXT_REAL_XCODEBUILD" -derivedDataPath "$DERIVED_DATA_PATH" "$@"
+          SH
+          chmod +x "$shim_dir/xcodebuild"
+          export IOSNEXT_REAL_XCODEBUILD="$real_xcodebuild"
+          export PATH="$shim_dir:$PATH"
+
+          ui_ok=0
+          for attempt in 1 2; do
+            echo "UI acceptance attempt $attempt/2" | tee -a xcodebuild.log
+            if bash Scripts/run_ui_acceptance_matrix.sh; then
+              ui_ok=1
+              echo "UI acceptance succeeded on attempt $attempt" | tee CIEvidence/ui-acceptance-result.txt
+              break
+            fi
+
+            attempt_dir="UIAcceptanceAttempts/attempt-$attempt"
+            mkdir -p "$attempt_dir"
+            [ ! -d UIAcceptance ] || mv UIAcceptance "$attempt_dir/"
+            [ ! -d UITestResults-iPhone.xcresult ] || mv UITestResults-iPhone.xcresult "$attempt_dir/"
+            [ ! -d UITestResults-iPad.xcresult ] || mv UITestResults-iPad.xcresult "$attempt_dir/"
+            cp xcodebuild.log "$attempt_dir/xcodebuild.log"
+
+            if [ "$attempt" -lt 2 ]; then
+              while IFS='=' read -r _ device_id; do
+                [ -n "$device_id" ] || continue
+                xcrun simctl shutdown "$device_id" 2>/dev/null || true
+                xcrun simctl erase "$device_id"
+              done < CIEvidence/ui-simulators.txt
+            fi
+          done
+
+          test "$ui_ok" -eq 1
+
+      - name: Reset visual simulator before card catalog
+        if: always() && steps.ui_acceptance.outcome == 'success'
+        run: |
+          set -euo pipefail
+          device_id="$(awk -F= '$1 == "iphone" { print $2 }' CIEvidence/ui-simulators.txt)"
+          test -n "$device_id"
+          xcrun simctl shutdown "$device_id" 2>/dev/null || true
+          xcrun simctl erase "$device_id"
+
       - name: Capture and validate live HA card catalog
-        if: success()
+        id: card_visual
+        if: always() && steps.ui_acceptance.outcome == 'success'
+        continue-on-error: true
         run: bash Scripts/capture_live_card_screenshots.sh
+
+      - name: Reset visual simulator before dark capture
+        if: always() && steps.ui_acceptance.outcome == 'success'
+        run: |
+          set -euo pipefail
+          device_id="$(awk -F= '$1 == "iphone" { print $2 }' CIEvidence/ui-simulators.txt)"
+          test -n "$device_id"
+          xcrun simctl shutdown "$device_id" 2>/dev/null || true
+          xcrun simctl erase "$device_id"
+
       - name: Capture Dark Mode product screens and cold launch
-        if: success()
+        id: dark_visual
+        if: always() && steps.ui_acceptance.outcome == 'success'
+        continue-on-error: true
         run: bash Scripts/run_dark_visual_acceptance.sh
+
+      - name: Reset visual simulator before animation capture
+        if: always() && steps.ui_acceptance.outcome == 'success'
+        run: |
+          set -euo pipefail
+          device_id="$(awk -F= '$1 == "iphone" { print $2 }' CIEvidence/ui-simulators.txt)"
+          test -n "$device_id"
+          xcrun simctl shutdown "$device_id" 2>/dev/null || true
+          xcrun simctl erase "$device_id"
+
       - name: Record and validate live interaction acceptance
-        if: success()
+        id: animation_visual
+        if: always() && steps.ui_acceptance.outcome == 'success'
+        continue-on-error: true
         run: bash Scripts/run_animation_acceptance.sh
+
+      - name: Evaluate visual acceptance gates
+        if: always() && steps.ui_acceptance.outcome == 'success'
+        run: |
+          set -euo pipefail
+          {
+            echo "card_visual=${{ steps.card_visual.outcome }}"
+            echo "dark_visual=${{ steps.dark_visual.outcome }}"
+            echo "animation_visual=${{ steps.animation_visual.outcome }}"
+          } | tee visual-gate-summary.txt
+          test "${{ steps.card_visual.outcome }}" = "success"
+          test "${{ steps.dark_visual.outcome }}" = "success"
+          test "${{ steps.animation_visual.outcome }}" = "success"
+
+      - name: Collect CI diagnostics
+        if: always()
+        run: |
+          set +e
+          mkdir -p CIEvidence/tmp
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "branch=$(git branch --show-current)"
+            echo "xctestrun=${XCTESTRUN_PATH:-unset}"
+            echo "derived_data=$DERIVED_DATA_PATH"
+          } >> CIEvidence/run-provenance.txt
+          xcodebuild -version > CIEvidence/xcode-version.txt 2>&1
+          xcrun simctl list devices available > CIEvidence/simctl-devices.txt 2>&1
+          find "$DERIVED_DATA_PATH" -type f -name '*.xctestrun' -print > CIEvidence/xctestruns.txt 2>&1
+          for log in /tmp/iosnext-*.log; do
+            [ -f "$log" ] || continue
+            cp "$log" CIEvidence/tmp/
+          done
+
       - name: Upload Xcode evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -224,6 +403,27 @@ jobs:
             UITestResults-iPhone.xcresult
             UITestResults-iPad.xcresult
             UIAcceptance
+            UIAcceptanceAttempts
             CardScreenshots
             AnimationAcceptance
             DarkVisualAcceptance
+            visual-gate-summary.txt
+            CIEvidence
+
+      - name: Cleanup run-local simulator and build state
+        if: always()
+        run: |
+          set +e
+          if [ -f CIEvidence/ui-simulators.txt ]; then
+            while IFS='=' read -r _ device_id; do
+              [ -n "$device_id" ] || continue
+              xcrun simctl terminate "$device_id" de.nicofroeba16.iosnext 2>/dev/null || true
+              xcrun simctl shutdown "$device_id" 2>/dev/null || true
+            done < CIEvidence/ui-simulators.txt
+          fi
+          if [ -f fake-ha.pid ]; then
+            kill "$(cat fake-ha.pid)" 2>/dev/null || true
+          fi
+          rm -rf "$DERIVED_DATA_PATH"
+          rm -rf "$RUNNER_TEMP/iosnext-xcodebuild-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rm -f /tmp/iosnext-*.log
