@@ -1,16 +1,15 @@
 import Foundation
 import Network
 
-final class NetworkReachability: @unchecked Sendable {
-    private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "de.nicofroeba16.iosnext.network-path")
-
-    func statuses() -> AsyncStream<Bool> {
+enum NetworkReachability {
+    static func statuses() -> AsyncStream<Bool> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let monitor = NWPathMonitor()
+            let queue = DispatchQueue(label: "de.nicofroeba16.iosnext.network-path")
             monitor.pathUpdateHandler = { path in
                 continuation.yield(path.status == .satisfied)
             }
-            continuation.onTermination = { [monitor] _ in
+            continuation.onTermination = { _ in
                 monitor.cancel()
             }
             monitor.start(queue: queue)

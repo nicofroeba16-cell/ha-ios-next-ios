@@ -41,6 +41,11 @@ struct AppRootView: View {
                 await appModel.restoreConnection()
             }
         }
+        .task {
+            if !isLiveCardTestMode && !isAnimationAcceptanceMode && !isProductAcceptanceMode {
+                await appModel.monitorNetworkChanges()
+            }
+        }
         .sheet(isPresented: Bindable(appModel).isPresentingConnection) {
             ConnectionSetupView(appModel: appModel)
                 .presentationDetents([.medium, .large])

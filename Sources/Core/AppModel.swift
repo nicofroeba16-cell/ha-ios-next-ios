@@ -40,24 +40,8 @@ final class AppModel {
     private var entityIndexByID: [String: Int] = [:]
     private var pendingStateChanges: [String: HomeAssistantStateChange] = [:]
     private var stateFlushTask: Task<Void, Never>?
-    private let reachability = NetworkReachability()
-    private var networkTask: Task<Void, Never>?
     private var networkAvailable = true
     private var applicationIsActive = true
-
-    init() {
-        let reachability = self.reachability
-        networkTask = Task { [weak self, reachability] in
-            for await available in reachability.statuses() {
-                guard !Task.isCancelled else { return }
-                self?.handleNetworkAvailability(available)
-            }
-        }
-    }
-
-    deinit {
-        networkTask?.cancel()
-    }
 
     var isConnected: Bool {
         if case .connected = connectionState { return true }
@@ -270,6 +254,13 @@ final class AppModel {
 
     func dismissActionError() {
         lastActionError = nil
+    }
+
+    func monitorNetworkChanges() async {
+        for await available in NetworkReachability.statuses() {
+            guard !Task.isCancelled else { return }
+            handleNetworkAvailability(available)
+        }
     }
 
     func setApplicationActive(_ active: Bool) {
