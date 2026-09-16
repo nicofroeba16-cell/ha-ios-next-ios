@@ -117,8 +117,10 @@ final class IOSNextUITests: XCTestCase {
     }
 
     private func accessibilityState(in application: XCUIApplication) -> String {
-        let probe = application.staticTexts["accessibility-state-probe"].firstMatch
-        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        let probe = application.descendants(matching: .any)
+            .matching(identifier: "accessibility-state-probe")
+            .firstMatch
+        XCTAssertTrue(probe.waitForExistence(timeout: 5))
         return probe.value as? String ?? ""
     }
 

@@ -68,7 +68,7 @@ run_accessibility_variant() {
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "platform=iOS Simulator,id=$iphone_id" \
-    "-only-testing:IOSNextUITests/$test_name" \
+    "-only-testing:IOSNextUITests/IOSNextUITests/$test_name" \
     -resultBundlePath "$OUT_DIR/$name.xcresult" \
     | tee -a xcodebuild.log
 }
@@ -82,12 +82,12 @@ xcodebuild test-without-building \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -only-testing:IOSNextUITests \
-  -skip-testing:IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
-  -skip-testing:IOSNextUITests/testAccessibilityCoreScreenRenders \
-  -skip-testing:IOSNextUITests/testDynamicTypeAccessibilityState \
-  -skip-testing:IOSNextUITests/testReduceMotionAccessibilityState \
-  -skip-testing:IOSNextUITests/testReduceTransparencyAccessibilityState \
-  -skip-testing:IOSNextUITests/testIncreaseContrastAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testAccessibilityCoreScreenRenders \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testDynamicTypeAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testReduceMotionAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testReduceTransparencyAccessibilityState \
+  -skip-testing:IOSNextUITests/IOSNextUITests/testIncreaseContrastAccessibilityState \
   -resultBundlePath UITestResults-iPhone.xcresult \
   | tee -a xcodebuild.log
 
@@ -110,7 +110,7 @@ xcodebuild test-without-building \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,id=$ipad_id" \
-  -only-testing:IOSNextUITests/testPrimaryProductScreensRenderLightAndDark \
-  -only-testing:IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
+  -only-testing:IOSNextUITests/IOSNextUITests/testPrimaryProductScreensRenderLightAndDark \
+  -only-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
   -resultBundlePath UITestResults-iPad.xcresult \
   | tee -a xcodebuild.log
