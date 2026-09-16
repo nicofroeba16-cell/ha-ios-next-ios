@@ -264,6 +264,13 @@ jobs:
         run: |
           set -euo pipefail
           real_xcodebuild="$(xcrun -f xcodebuild)"
+          case "${XCTESTRUN_PATH:-}" in
+            "$DERIVED_DATA_PATH"/*) ;;
+            *)
+              echo "UI acceptance xctestrun is not bound to current-run DerivedData: ${XCTESTRUN_PATH:-unset}" >&2
+              exit 1
+              ;;
+          esac
           shim_dir="$RUNNER_TEMP/iosnext-xcodebuild-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           rm -rf "$shim_dir"
           mkdir -p "$shim_dir" UIAcceptanceAttempts
@@ -273,9 +280,11 @@ jobs:
           : "${IOSNEXT_REAL_XCODEBUILD:?}"
           : "${DERIVED_DATA_PATH:?}"
           for arg in "$@"; do
-            if [ "$arg" = "-derivedDataPath" ]; then
-              exec "$IOSNEXT_REAL_XCODEBUILD" "$@"
-            fi
+            case "$arg" in
+              -derivedDataPath|-xctestrun)
+                exec "$IOSNEXT_REAL_XCODEBUILD" "$@"
+                ;;
+            esac
           done
           exec "$IOSNEXT_REAL_XCODEBUILD" -derivedDataPath "$DERIVED_DATA_PATH" "$@"
           SH
