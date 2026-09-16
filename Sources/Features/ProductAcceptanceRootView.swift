@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 enum ProductAcceptanceScreen: String, CaseIterable {
@@ -36,14 +37,16 @@ struct ProductAcceptanceRootView: View {
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private let screen: ProductAcceptanceScreen
-    private let options: ProductAcceptanceOptions
+    @State private var screen: ProductAcceptanceScreen
+    @State private var forcedColorScheme: ColorScheme?
     @State private var appModel = AppModel.preview
     @State private var chatModel = ChatModel.preview
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
-        screen = Self.screen(from: arguments)
-        options = ProductAcceptanceOptions(arguments: arguments)
+        let initialScreen = Self.screen(from: arguments)
+        let options = ProductAcceptanceOptions(arguments: arguments)
+        _screen = State(initialValue: initialScreen)
+        _forcedColorScheme = State(initialValue: options.colorScheme)
     }
 
     var body: some View {
@@ -54,12 +57,37 @@ struct ProductAcceptanceRootView: View {
                 standaloneScreen
             }
         }
-.preferredColorScheme(options.colorScheme)
+        .id("product-acceptance-view-\(screen.rawValue)-\(appearanceName)")
+        .preferredColorScheme(forcedColorScheme)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("product-acceptance-\(screen.rawValue)")
         .overlay(alignment: .topLeading) {
-            accessibilityProbe
+            VStack(spacing: 0) {
+                accessibilityProbe
+                routeReadyProbe
+            }
         }
+        .onOpenURL { url in
+            guard let route = Self.route(from: url) else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                screen = route.screen
+                forcedColorScheme = route.colorScheme
+            }
+        }
+    }
+
+    private var appearanceName: String {
+        forcedColorScheme == .dark ? "dark" : "light"
+    }
+
+    private var routeReadyProbe: some View {
+        Text("Product acceptance ready")
+            .font(.system(size: 1))
+            .foregroundStyle(.clear)
+            .frame(width: 1, height: 1)
+            .accessibilityIdentifier("product-acceptance-ready-\(screen.rawValue)-\(appearanceName)")
     }
 
     private var accessibilityStateSummary: String {
@@ -108,5 +136,24 @@ struct ProductAcceptanceRootView: View {
               let screen = ProductAcceptanceScreen(rawValue: rawValue)
         else { return .home }
         return screen
+    }
+
+    static func route(from url: URL) -> (screen: ProductAcceptanceScreen, colorScheme: ColorScheme)? {
+        guard url.scheme == "iosnext",
+              url.host == "ci-product",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let rawScreen = components.queryItems?.first(where: { $0.name == "screen" })?.value,
+              let screen = ProductAcceptanceScreen(rawValue: rawScreen),
+              let rawStyle = components.queryItems?.first(where: { $0.name == "style" })?.value
+        else { return nil }
+
+        switch rawStyle {
+        case "light":
+            return (screen, .light)
+        case "dark":
+            return (screen, .dark)
+        default:
+            return nil
+        }
     }
 }
