@@ -8,18 +8,25 @@ enum IOSNextLayout {
     static let pageMaxWidth: CGFloat = 760
 }
 
+enum IOSNextMotion {
+    static let micro = Animation.smooth(duration: 0.20)
+    static let state = Animation.smooth(duration: 0.28)
+    static let navigation = Animation.smooth(duration: 0.34)
+    static let emphasis = Animation.spring(duration: 0.42, bounce: 0.14)
+}
+
 struct IOSNextBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
-            Color(uiColor: .systemGroupedBackground)
+            Color("LaunchBackground")
 
             LinearGradient(
                 colors: [
-                    Color.accentColor.opacity(colorScheme == .dark ? 0.22 : 0.16),
-                    Color.indigo.opacity(colorScheme == .dark ? 0.12 : 0.075),
-                    Color.cyan.opacity(colorScheme == .dark ? 0.10 : 0.055),
+                    Color.accentColor.opacity(colorScheme == .dark ? 0.20 : 0.105),
+                    Color.indigo.opacity(colorScheme == .dark ? 0.105 : 0.045),
+                    Color.cyan.opacity(colorScheme == .dark ? 0.085 : 0.030),
                     Color.clear
                 ],
                 startPoint: .topLeading,
@@ -28,7 +35,7 @@ struct IOSNextBackground: View {
 
             RadialGradient(
                 colors: [
-                    Color.accentColor.opacity(colorScheme == .dark ? 0.12 : 0.08),
+                    Color.accentColor.opacity(colorScheme == .dark ? 0.105 : 0.035),
                     Color.clear
                 ],
                 center: .bottomTrailing,
@@ -267,8 +274,7 @@ struct IOSNextErrorBanner: View {
     }
 }
 
-private struct IOSNextCardModifier: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+private struct IOSNextContentSurfaceModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
@@ -276,33 +282,42 @@ private struct IOSNextCardModifier: ViewModifier {
 
         content
             .background {
-                if reduceTransparency {
-                    shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
-                } else {
-                    shape
-                        .fill(.thinMaterial)
-                        .overlay {
-                            shape.fill(Color.accentColor.opacity(colorScheme == .dark ? 0.045 : 0.025))
-                        }
-                }
+                shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
             }
             .overlay {
                 shape.strokeBorder(
-                    Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.065),
+                    Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.055),
                     lineWidth: 0.5
                 )
             }
             .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.075),
-                radius: 16,
+                color: Color.black.opacity(colorScheme == .dark ? 0.12 : 0.035),
+                radius: colorScheme == .dark ? 12 : 8,
                 x: 0,
-                y: 6
+                y: colorScheme == .dark ? 5 : 2
             )
     }
 }
 
+private struct IOSNextFunctionalGlassModifier<S: Shape>: ViewModifier {
+    let shape: S
+
+    func body(content: Content) -> some View {
+        content
+            .glassEffect(.regular.interactive(), in: shape)
+    }
+}
+
 extension View {
+    func iosNextSurface() -> some View {
+        modifier(IOSNextContentSurfaceModifier())
+    }
+
+    func iosNextFunctionalGlass<S: Shape>(in shape: S) -> some View {
+        modifier(IOSNextFunctionalGlassModifier(shape: shape))
+    }
+
     func iosNextCard() -> some View {
-        modifier(IOSNextCardModifier())
+        iosNextSurface()
     }
 }

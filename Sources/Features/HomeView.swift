@@ -55,8 +55,9 @@ struct HomeView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
-        .padding(20)
-        .iosNextCard()
+        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
+        .accessibilityIdentifier("home-header")
     }
 
     private var metrics: some View {
@@ -111,7 +112,7 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .iosNextCard()
+            .iosNextSurface()
         }
     }
 
@@ -134,7 +135,7 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .iosNextCard()
+                .iosNextSurface()
             }
         }
     }

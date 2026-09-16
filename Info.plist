@@ -32,7 +32,10 @@
     <key>IOSNextWireGuardKeychainAccessGroup</key>
     <string>$(AppIdentifierPrefix)de.nicofroeba16.iosnext.shared</string>
     <key>UILaunchScreen</key>
-    <dict/>
+    <dict>
+        <key>UIColorName</key>
+        <string>LaunchBackground</string>
+    </dict>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>

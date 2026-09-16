@@ -29,7 +29,7 @@ struct AppRootView: View {
                 }
             }
         }
-        .animation(.smooth(duration: 0.3), value: appModel.isConnected)
+        .animation(IOSNextMotion.navigation, value: appModel.isConnected)
         .task {
             if !isLiveCardTestMode && !isAnimationAcceptanceMode {
                 await appModel.restoreConnection()

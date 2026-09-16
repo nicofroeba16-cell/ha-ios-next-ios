@@ -66,7 +66,7 @@ struct AnimationAcceptanceView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
         }
-        .animation(reduceMotion ? .linear(duration: 0.15) : .smooth(duration: 0.42), value: stage)
+        .animation(reduceMotion ? .linear(duration: 0.15) : IOSNextMotion.emphasis, value: stage)
         .task {
             if let requestedStage {
                 configureSettledState(for: requestedStage)
@@ -83,7 +83,7 @@ struct AnimationAcceptanceView: View {
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(.tint)
                 .frame(width: 44, height: 44)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .iosNextFunctionalGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Live Interaction Test").font(.headline)
                 Text(stage.title)
@@ -97,7 +97,7 @@ struct AnimationAcceptanceView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(14)
-        .iosNextCard()
+        .iosNextSurface()
     }
 
     @ViewBuilder
@@ -115,7 +115,7 @@ struct AnimationAcceptanceView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 280)
-            .iosNextCard()
+            .iosNextSurface()
         case .navigation:
             VStack(alignment: .leading, spacing: 16) {
                 Text("Navigation").font(.title2.bold())
@@ -136,7 +136,7 @@ struct AnimationAcceptanceView: View {
                 }
             }
             .padding(18)
-            .iosNextCard()
+            .iosNextSurface()
         case .lightToggle:
             VStack(spacing: 18) {
                 Image(systemName: lightOn ? "lightbulb.fill" : "lightbulb")
@@ -149,7 +149,7 @@ struct AnimationAcceptanceView: View {
                     .buttonBorderShape(.capsule)
             }
             .frame(maxWidth: .infinity, minHeight: 280)
-            .iosNextCard()
+            .iosNextSurface()
         case .conditional:
             VStack(spacing: 14) {
                 Toggle("Bedingung erfüllt", isOn: $conditionalVisible)
@@ -157,12 +157,12 @@ struct AnimationAcceptanceView: View {
                     Label("Conditional Card sichtbar", systemImage: "checkmark.circle.fill")
                         .padding(16)
                         .frame(maxWidth: .infinity)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .transition(.opacity.combined(with: .scale(scale: 0.94)))
                 }
             }
             .padding(18)
-            .iosNextCard()
+            .iosNextSurface()
         case .media:
             VStack(spacing: 18) {
                 Image(systemName: mediaPlaying ? "pause.circle.fill" : "play.circle.fill")
@@ -174,7 +174,7 @@ struct AnimationAcceptanceView: View {
                     .buttonBorderShape(.capsule)
             }
             .frame(maxWidth: .infinity, minHeight: 280)
-            .iosNextCard()
+            .iosNextSurface()
         case .slider:
             VStack(alignment: .leading, spacing: 18) {
                 Text("Helligkeit \(Int(sliderValue * 100))%")
@@ -184,7 +184,7 @@ struct AnimationAcceptanceView: View {
                     .accessibilityIdentifier("animation-slider")
             }
             .padding(22)
-            .iosNextCard()
+            .iosNextSurface()
         case .chat:
             VStack(spacing: 14) {
                 HStack {
@@ -198,7 +198,7 @@ struct AnimationAcceptanceView: View {
                     .textFieldStyle(.roundedBorder)
             }
             .padding(18)
-            .iosNextCard()
+            .iosNextSurface()
         case .owner:
             VStack(spacing: 16) {
                 Image(systemName: ownerUnlocked ? "lock.open.fill" : "lock.fill")
@@ -212,7 +212,7 @@ struct AnimationAcceptanceView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 280)
-            .iosNextCard()
+            .iosNextSurface()
         }
     }
 

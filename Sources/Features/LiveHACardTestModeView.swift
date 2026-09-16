@@ -49,7 +49,7 @@ struct LiveHACardTestModeView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(18)
-        .iosNextCard()
+        .iosNextSurface()
     }
 
     private var structureAndMushroomPage: some View {
@@ -58,7 +58,7 @@ struct LiveHACardTestModeView: View {
             VStack(alignment: .leading, spacing: 14) {
                 MushroomTitleMirror(title: "Zuhause", subtitle: "Health · System")
                     .padding(18)
-                    .iosNextCard()
+                    .iosNextSurface()
                     .accessibilityIdentifier(id(.mushroomTitle))
 
                 testLabel(.grid)
@@ -163,7 +163,7 @@ private struct MushroomChipsMirror: View {
             .foregroundStyle(tint)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .background(.thinMaterial, in: Capsule())
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
     }
 }
 
@@ -185,7 +185,7 @@ private struct MushroomTemplateMirror: View {
         }
         .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
         .padding(15)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -214,8 +214,8 @@ private struct ConditionalMirror: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .animation(.smooth, value: active)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .animation(IOSNextMotion.state, value: active)
     }
 }
 
@@ -248,7 +248,7 @@ private struct BatteryStateMirror: View {
             }
         }
         .padding(18)
-        .iosNextCard()
+        .iosNextSurface()
     }
 
     private func tint(_ level: Double) -> Color {
@@ -296,7 +296,7 @@ private struct IOSLightMirror: View {
                 .accessibilityLabel("Helligkeit")
         }
         .padding(18)
-        .iosNextCard()
+        .iosNextSurface()
     }
 }
 
@@ -348,7 +348,7 @@ private struct IOSMediaMirror: View {
                 .background(.thinMaterial, in: Capsule())
         }
         .padding(18)
-        .iosNextCard()
+        .iosNextSurface()
     }
 }
 
@@ -365,7 +365,7 @@ private struct NavbarMirror: View {
         HStack(spacing: 6) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button {
-                    withAnimation(.smooth(duration: 0.28)) {
+                    withAnimation(IOSNextMotion.state) {
                         selection = index
                     }
                 } label: {
@@ -388,11 +388,6 @@ private struct NavbarMirror: View {
             }
         }
         .padding(8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
+        .iosNextFunctionalGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }
