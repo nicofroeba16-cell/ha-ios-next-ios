@@ -6,6 +6,13 @@ CI_RUNTIME_SCOPE="${CI_RUNTIME_SCOPE:-full}"
 
 PROJECT="IOSNext.xcodeproj"
 SCHEME="IOSNext"
+
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then
+  test -f "$IOSNEXT_XCTESTRUN"
+  XCODEBUILD_TEST_ARGS=(-xctestrun "$IOSNEXT_XCTESTRUN")
+else
+  XCODEBUILD_TEST_ARGS=(-project "$PROJECT" -scheme "$SCHEME")
+fi
 IPHONE_NAME="iPhone 17 Pro"
 OUT_DIR="UIAcceptance"
 
@@ -70,10 +77,10 @@ run_accessibility_variant() {
 
   rm -rf "$OUT_DIR/$name.xcresult"
   runtime_count xcodebuild_invocations
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then runtime_count xctestrun_invocations; fi
   runtime_start xcodebuild_ui_variant
   xcodebuild test-without-building \
-    -project "$PROJECT" \
-    -scheme "$SCHEME" \
+    "${XCODEBUILD_TEST_ARGS[@]}" \
     -destination "platform=iOS Simulator,id=$iphone_id" \
     "-only-testing:IOSNextUITests/IOSNextUITests/$test_name" \
     -resultBundlePath "$OUT_DIR/$name.xcresult" \
@@ -88,10 +95,10 @@ runtime_end simulator_boot_iphone
 reset_accessibility "$iphone_id"
 
 runtime_count xcodebuild_invocations
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then runtime_count xctestrun_invocations; fi
 runtime_start xcodebuild_ui_iphone
 xcodebuild test-without-building \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
+  "${XCODEBUILD_TEST_ARGS[@]}" \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -only-testing:IOSNextUITests \
   -skip-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
@@ -121,10 +128,10 @@ runtime_end simulator_boot_ipad
 reset_accessibility "$ipad_id"
 
 runtime_count xcodebuild_invocations
+if test -n "${IOSNEXT_XCTESTRUN:-}"; then runtime_count xctestrun_invocations; fi
 runtime_start xcodebuild_ui_ipad
 xcodebuild test-without-building \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
+  "${XCODEBUILD_TEST_ARGS[@]}" \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -only-testing:IOSNextUITests/IOSNextUITests/testPrimaryProductScreensRenderLightAndDark \
   -only-testing:IOSNextUITests/IOSNextUITests/testIPadPortraitLandscapeCoreScreens \
