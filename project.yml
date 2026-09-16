@@ -61,6 +61,7 @@ targets:
       - WireGuard/ValidatedWireGuardConfiguration+WireGuardKit.swift
       - Sources/Core/WireGuardConfigurationValidator.swift
       - Sources/Core/WireGuardKeychain.swift
+      - Sources/Core/KeychainStore.swift
     dependencies:
       - target: WireGuardGoBridgeiOS
       - package: WireGuardKit
