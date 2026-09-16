@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppRootView: View {
     let appModel: AppModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var chatModel = ChatModel()
     @State private var isPresentingStandaloneChat = false
 
@@ -32,6 +33,9 @@ struct AppRootView: View {
             }
         }
         .animation(IOSNextMotion.navigation, value: appModel.isConnected)
+        .onChange(of: scenePhase) { _, phase in
+            appModel.setApplicationActive(phase == .active)
+        }
         .task {
             if !isLiveCardTestMode && !isAnimationAcceptanceMode && !isProductAcceptanceMode {
                 await appModel.restoreConnection()

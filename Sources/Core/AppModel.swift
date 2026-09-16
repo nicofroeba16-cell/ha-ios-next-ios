@@ -40,6 +40,24 @@ final class AppModel {
     private var entityIndexByID: [String: Int] = [:]
     private var pendingStateChanges: [String: HomeAssistantStateChange] = [:]
     private var stateFlushTask: Task<Void, Never>?
+    private let reachability = NetworkReachability()
+    private var networkTask: Task<Void, Never>?
+    private var networkAvailable = true
+    private var applicationIsActive = true
+
+    init() {
+        let reachability = self.reachability
+        networkTask = Task { [weak self, reachability] in
+            for await available in reachability.statuses() {
+                guard !Task.isCancelled else { return }
+                self?.handleNetworkAvailability(available)
+            }
+        }
+    }
+
+    deinit {
+        networkTask?.cancel()
+    }
 
     var isConnected: Bool {
         if case .connected = connectionState { return true }
@@ -254,6 +272,18 @@ final class AppModel {
         lastActionError = nil
     }
 
+    func setApplicationActive(_ active: Bool) {
+        applicationIsActive = active
+        if active {
+            if shouldReconnect, currentConfiguration != nil, !isConnected {
+                scheduleReconnect(immediate: true)
+            }
+        } else {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+        }
+    }
+
     func entities(inDomain domain: String) -> [HomeAssistantEntity] {
         entities.filter { $0.entityID.hasPrefix("\(domain).") }
     }
@@ -268,6 +298,7 @@ final class AppModel {
                 enqueue(change)
             }
             guard !Task.isCancelled else { return }
+            connectionState = .connecting
             scheduleReconnect()
         }
     }
@@ -312,16 +343,36 @@ final class AppModel {
         }
     }
 
-    private func scheduleReconnect() {
-        guard shouldReconnect, currentConfiguration != nil else { return }
+    static func reconnectDelaySeconds(attempt: Int, jitterFraction: Double) -> Double {
+        let base = min(pow(2.0, Double(max(attempt, 1) - 1)), 30)
+        let boundedJitter = min(max(jitterFraction, -0.2), 0.2)
+        return max(0.25, base * (1 + boundedJitter))
+    }
+
+    private func scheduleReconnect(immediate: Bool = false) {
+        guard shouldReconnect,
+              currentConfiguration != nil,
+              applicationIsActive,
+              networkAvailable else { return }
+
         connectionState = .connecting
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
             guard let self else { return }
             reconnectAttempt += 1
-            let seconds = min(pow(2.0, Double(reconnectAttempt - 1)), 30)
-            try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled, shouldReconnect, let configuration = currentConfiguration else { return }
+            if !immediate {
+                let jitter = Double.random(in: -0.2...0.2)
+                let seconds = Self.reconnectDelaySeconds(
+                    attempt: reconnectAttempt,
+                    jitterFraction: jitter
+                )
+                try? await Task.sleep(for: .seconds(seconds))
+            }
+            guard !Task.isCancelled,
+                  shouldReconnect,
+                  applicationIsActive,
+                  networkAvailable,
+                  let configuration = currentConfiguration else { return }
             do {
                 let states = try await client.connect(configuration: configuration)
                 replaceEntities(with: states)
@@ -329,9 +380,27 @@ final class AppModel {
                 connectionState = .connected
                 observeStateChanges()
             } catch {
+                guard !Task.isCancelled else { return }
                 lastActionError = "Erneute Verbindung fehlgeschlagen: \(error.localizedDescription)"
                 scheduleReconnect()
             }
+        }
+    }
+
+    private func handleNetworkAvailability(_ available: Bool) {
+        guard networkAvailable != available else { return }
+        networkAvailable = available
+
+        if available {
+            if shouldReconnect, currentConfiguration != nil, !isConnected, applicationIsActive {
+                scheduleReconnect(immediate: true)
+            }
+        } else {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            guard shouldReconnect, currentConfiguration != nil else { return }
+            connectionState = .connecting
+            Task { await client.disconnect() }
         }
     }
 

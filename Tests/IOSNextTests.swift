@@ -249,4 +249,24 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(LiveHACardTestModeView.page(from: ["app", "--live-card-page=99"]), 0)
     }
 
+    func testHomeAssistantCommandTimeoutBudgets() {
+        XCTAssertEqual(HomeAssistantClient.commandTimeoutSeconds(for: "get_states"), 15)
+        XCTAssertEqual(HomeAssistantClient.commandTimeoutSeconds(for: "subscribe_events"), 10)
+        XCTAssertEqual(HomeAssistantClient.commandTimeoutSeconds(for: "call_service"), 10)
+    }
+
+    func testReconnectBackoffIncludesBoundedJitter() {
+        XCTAssertEqual(AppModel.reconnectDelaySeconds(attempt: 1, jitterFraction: 0), 1, accuracy: 0.001)
+        XCTAssertEqual(AppModel.reconnectDelaySeconds(attempt: 5, jitterFraction: 0), 16, accuracy: 0.001)
+        XCTAssertEqual(AppModel.reconnectDelaySeconds(attempt: 9, jitterFraction: 0), 30, accuracy: 0.001)
+        XCTAssertEqual(AppModel.reconnectDelaySeconds(attempt: 3, jitterFraction: -1), 3.2, accuracy: 0.001)
+        XCTAssertEqual(AppModel.reconnectDelaySeconds(attempt: 3, jitterFraction: 1), 4.8, accuracy: 0.001)
+    }
+
+    func testProductAcceptanceScreenArguments() {
+        XCTAssertEqual(ProductAcceptanceRootView.screen(from: ["app", "--product-ui-test-screen=home"]), .home)
+        XCTAssertEqual(ProductAcceptanceRootView.screen(from: ["app", "--product-ui-test-screen=media-detail"]), .mediaDetail)
+        XCTAssertEqual(ProductAcceptanceRootView.screen(from: ["app", "--product-ui-test-screen=invalid"]), .home)
+    }
+
 }

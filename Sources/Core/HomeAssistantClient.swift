@@ -21,6 +21,7 @@ enum HomeAssistantClientError: LocalizedError {
     case invalidWebSocketURL
     case invalidResponse
     case disconnected
+    case timedOut
     case server(String)
 
     var errorDescription: String? {
@@ -28,6 +29,7 @@ enum HomeAssistantClientError: LocalizedError {
         case .invalidWebSocketURL: "Die Home-Assistant-URL ist ungültig."
         case .invalidResponse: "Home Assistant hat eine ungültige Antwort gesendet."
         case .disconnected: "Die Verbindung zu Home Assistant wurde getrennt."
+        case .timedOut: "Home Assistant hat nicht rechtzeitig geantwortet."
         case let .server(message): message
         }
     }
@@ -37,9 +39,15 @@ actor HomeAssistantClient {
     private typealias Response = [String: JSONValue]
     private typealias ResponseContinuation = CheckedContinuation<Response, Error>
 
+    private struct PendingRequest {
+        let continuation: ResponseContinuation
+        let timeoutTask: Task<Void, Never>
+    }
+
     private var socket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
-    private var pendingRequests: [Int: ResponseContinuation] = [:]
+    private var heartbeatTask: Task<Void, Never>?
+    private var pendingRequests: [Int: PendingRequest] = [:]
     private var messageID = 0
     private var generation = 0
     private var stateContinuation: AsyncStream<HomeAssistantStateChange>.Continuation?
@@ -54,50 +62,60 @@ actor HomeAssistantClient {
         generation += 1
         let activeGeneration = generation
         let task = URLSession.shared.webSocketTask(with: url)
+        task.maximumMessageSize = 8 * 1024 * 1024
         socket = task
         task.resume()
 
-        let required = try await receiveObject(from: task)
-        guard required["type"]?.stringValue == "auth_required" else {
-            throw HomeAssistantClientError.invalidResponse
-        }
-        try await send([
-            "type": .string("auth"),
-            "access_token": .string(configuration.accessToken)
-        ], through: task)
+        do {
+            let required = try await receiveObject(from: task)
+            guard required["type"]?.stringValue == "auth_required" else {
+                throw HomeAssistantClientError.invalidResponse
+            }
+            try await send([
+                "type": .string("auth"),
+                "access_token": .string(configuration.accessToken)
+            ], through: task)
 
-        let authenticated = try await receiveObject(from: task)
-        guard authenticated["type"]?.stringValue == "auth_ok" else {
-            throw HomeAssistantClientError.server(
-                authenticated["message"]?.stringValue ?? "Anmeldung bei Home Assistant fehlgeschlagen."
+            let authenticated = try await receiveObject(from: task)
+            guard authenticated["type"]?.stringValue == "auth_ok" else {
+                throw HomeAssistantClientError.server(
+                    authenticated["message"]?.stringValue ?? "Anmeldung bei Home Assistant fehlgeschlagen."
+                )
+            }
+
+            let streamPair = AsyncStream.makeStream(
+                of: HomeAssistantStateChange.self,
+                bufferingPolicy: .bufferingNewest(512)
             )
-        }
+            stateStream = streamPair.stream
+            stateContinuation = streamPair.continuation
+            receiveTask = Task { [weak self] in
+                guard let self else { return }
+                await self.receiveLoop(task: task, generation: activeGeneration)
+            }
+            heartbeatTask = Task { [weak self] in
+                guard let self else { return }
+                await self.heartbeatLoop(task: task, generation: activeGeneration)
+            }
 
-        let streamPair = AsyncStream.makeStream(
-            of: HomeAssistantStateChange.self,
-            bufferingPolicy: .bufferingNewest(512)
-        )
-        stateStream = streamPair.stream
-        stateContinuation = streamPair.continuation
-        receiveTask = Task { [weak self] in
-            guard let self else { return }
-            await self.receiveLoop(task: task, generation: activeGeneration)
-        }
+            let statesResponse = try await command(type: "get_states")
+            guard let rows = statesResponse["result"]?.arrayValue else {
+                throw HomeAssistantClientError.invalidResponse
+            }
+            let states = rows.compactMap { value -> HomeAssistantEntity? in
+                guard case let .object(object) = value else { return nil }
+                return HomeAssistantEntity(object: object)
+            }
 
-        let statesResponse = try await command(type: "get_states")
-        guard let rows = statesResponse["result"]?.arrayValue else {
-            throw HomeAssistantClientError.invalidResponse
+            _ = try await command(
+                type: "subscribe_events",
+                extra: ["event_type": .string("state_changed")]
+            )
+            return states
+        } catch {
+            failConnection(error, generation: activeGeneration)
+            throw error
         }
-        let states = rows.compactMap { value -> HomeAssistantEntity? in
-            guard case let .object(object) = value else { return nil }
-            return HomeAssistantEntity(object: object)
-        }
-
-        _ = try await command(
-            type: "subscribe_events",
-            extra: ["event_type": .string("state_changed")]
-        )
-        return states
     }
 
     func stateChanges() -> AsyncStream<HomeAssistantStateChange> {
@@ -108,6 +126,8 @@ actor HomeAssistantClient {
         generation += 1
         receiveTask?.cancel()
         receiveTask = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         finishConnection(with: HomeAssistantClientError.disconnected)
@@ -127,6 +147,15 @@ actor HomeAssistantClient {
         ])
     }
 
+    static func commandTimeoutSeconds(for type: String) -> Double {
+        switch type {
+        case "get_states": 15
+        case "subscribe_events": 10
+        case "call_service": 10
+        default: 10
+        }
+    }
+
     private func command(type: String, extra: Response = [:]) async throws -> Response {
         guard let socket else { throw HomeAssistantClientError.disconnected }
         messageID += 1
@@ -134,15 +163,30 @@ actor HomeAssistantClient {
         var payload = extra
         payload["id"] = .number(Double(requestID))
         payload["type"] = .string(type)
+        let timeoutSeconds = Self.commandTimeoutSeconds(for: type)
 
-        return try await withCheckedThrowingContinuation { continuation in
-            pendingRequests[requestID] = continuation
-            Task { [weak self] in
-                do {
-                    try await self?.send(payload, through: socket)
-                } catch {
-                    await self?.failRequest(requestID, error: error)
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let timeoutTask = Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(timeoutSeconds))
+                    guard !Task.isCancelled else { return }
+                    await self?.failRequest(requestID, error: HomeAssistantClientError.timedOut)
                 }
+                pendingRequests[requestID] = PendingRequest(
+                    continuation: continuation,
+                    timeoutTask: timeoutTask
+                )
+                Task { [weak self] in
+                    do {
+                        try await self?.send(payload, through: socket)
+                    } catch {
+                        await self?.failRequest(requestID, error: error)
+                    }
+                }
+            }
+        } onCancel: {
+            Task { [weak self] in
+                await self?.failRequest(requestID, error: CancellationError())
             }
         }
     }
@@ -154,20 +198,57 @@ actor HomeAssistantClient {
                 route(response)
             }
         } catch {
-            guard activeGeneration == generation else { return }
-            socket = nil
-            receiveTask = nil
-            finishConnection(with: error)
+            failConnection(error, generation: activeGeneration)
         }
+    }
+
+    private func heartbeatLoop(task: URLSessionWebSocketTask, generation activeGeneration: Int) async {
+        while !Task.isCancelled, activeGeneration == generation {
+            do {
+                try await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled, activeGeneration == generation else { return }
+                try await sendPing(through: task)
+            } catch is CancellationError {
+                return
+            } catch {
+                failConnection(error, generation: activeGeneration)
+                return
+            }
+        }
+    }
+
+    private func sendPing(through task: URLSessionWebSocketTask) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            task.sendPing { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    private func failConnection(_ error: Error, generation activeGeneration: Int) {
+        guard activeGeneration == generation else { return }
+        generation += 1
+        receiveTask?.cancel()
+        receiveTask = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
+        finishConnection(with: error)
     }
 
     private func route(_ response: Response) {
         if let id = response["id"]?.numberValue.map({ Int($0) }),
-           let continuation = pendingRequests.removeValue(forKey: id) {
+           let pending = pendingRequests.removeValue(forKey: id) {
+            pending.timeoutTask.cancel()
             if response["success"]?.boolValue == false {
-                continuation.resume(throwing: HomeAssistantClientError.server(errorMessage(from: response)))
+                pending.continuation.resume(throwing: HomeAssistantClientError.server(errorMessage(from: response)))
             } else {
-                continuation.resume(returning: response)
+                pending.continuation.resume(returning: response)
             }
             return
         }
@@ -189,13 +270,18 @@ actor HomeAssistantClient {
     }
 
     private func failRequest(_ id: Int, error: Error) {
-        pendingRequests.removeValue(forKey: id)?.resume(throwing: error)
+        guard let pending = pendingRequests.removeValue(forKey: id) else { return }
+        pending.timeoutTask.cancel()
+        pending.continuation.resume(throwing: error)
     }
 
     private func finishConnection(with error: Error) {
         let requests = pendingRequests.values
         pendingRequests.removeAll()
-        requests.forEach { $0.resume(throwing: error) }
+        requests.forEach {
+            $0.timeoutTask.cancel()
+            $0.continuation.resume(throwing: error)
+        }
         stateContinuation?.finish()
         stateContinuation = nil
         stateStream = nil

@@ -96,6 +96,7 @@ final class HomeAssistantOAuthService {
     func refresh(_ credential: HomeAssistantOAuthCredential) async throws -> HomeAssistantOAuthCredential {
         guard credential.needsRefresh else { return credential }
         var request = URLRequest(url: credential.configuration.tokenURL)
+        request.timeoutInterval = 15
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = formBody([
@@ -135,6 +136,7 @@ final class HomeAssistantOAuthService {
 
     private func exchange(code: String, using configuration: HomeAssistantOAuthConfiguration) async throws -> HomeAssistantOAuthTokens {
         var request = URLRequest(url: configuration.tokenURL)
+        request.timeoutInterval = 15
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = formBody([
