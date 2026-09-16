@@ -286,7 +286,8 @@ def main():
     args = parser.parse_args()
 
     with Server((args.host, args.port), Handler) as server:
-        print(f"fake-ha-listening={args.host}:{args.port}", flush=True)
+        actual_port = server.server_address[1]
+        print(f"fake-ha-listening={args.host}:{actual_port}", flush=True)
         server.serve_forever()
 
 

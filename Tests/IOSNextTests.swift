@@ -292,8 +292,9 @@ final class IOSNextTests: XCTestCase {
     }
 
     private func fakeHAConfiguration(_ mode: String) -> HomeAssistantConfiguration {
-        HomeAssistantConfiguration(
-            baseURL: URL(string: "http://127.0.0.1:18765?mode=\(mode)")!,
+        let port = ProcessInfo.processInfo.environment["FAKE_HA_PORT"] ?? "18765"
+        return HomeAssistantConfiguration(
+            baseURL: URL(string: "http://127.0.0.1:\(port)?mode=\(mode)")!,
             accessToken: "integration-test-token"
         )
     }

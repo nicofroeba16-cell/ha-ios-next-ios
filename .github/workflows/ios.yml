@@ -98,20 +98,82 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile Scripts/fake_ha_websocket_server.py
-          python3 Scripts/fake_ha_websocket_server.py --port 18765 > fake-ha.log 2>&1 &
-          echo $! > fake-ha.pid
+          : > fake-ha.log
+          python3 Scripts/fake_ha_websocket_server.py --port 0 > fake-ha.log 2>&1 &
+          pid=$!
+          echo "$pid" > fake-ha.pid
+
           ready=0
-          for _ in {1..40}; do
-            if nc -z 127.0.0.1 18765; then
+          for _ in {1..80}; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat fake-ha.log
+              exit 1
+            fi
+            if grep -q '^fake-ha-listening=127\.0\.0\.1:[0-9][0-9]*
+      - name: Run unit tests on iOS 27
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project IOSNext.xcodeproj \
+            -scheme IOSNext \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -only-testing:IOSNextTests \
+            -resultBundlePath TestResults.xcresult \
+            | tee -a xcodebuild.log
+      - name: Show fake Home Assistant log on failure
+        if: failure()
+        run: cat fake-ha.log || true
+
+      - name: Stop fake Home Assistant test server
+        if: always()
+        run: |
+          if [ -f fake-ha.pid ]; then
+            kill "$(cat fake-ha.pid)" 2>/dev/null || true
+          fi
+      - name: Run real product UI acceptance matrix
+        run: bash Scripts/run_ui_acceptance_matrix.sh
+      - name: Capture and validate live HA card catalog
+        if: success()
+        run: bash Scripts/capture_live_card_screenshots.sh
+      - name: Record and validate live interaction acceptance
+        if: success()
+        run: bash Scripts/run_animation_acceptance.sh
+      - name: Upload Xcode evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-27-xcode-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            xcodebuild.log
+            packet-tunnel-entitlements.log
+            launch-screen-metadata.log
+            fake-ha.log
+            TestResults.xcresult
+            UITestResults-iPhone.xcresult
+            UITestResults-iPad.xcresult
+            UIAcceptance
+            CardScreenshots
+            AnimationAcceptance
+ fake-ha.log; then
               ready=1
               break
             fi
             sleep 0.1
           done
+
           if [ "$ready" -ne 1 ]; then
             cat fake-ha.log
             exit 1
           fi
+
+          port="$(sed -n 's/^fake-ha-listening=127\.0\.0\.1:\([0-9][0-9]*\)$/\1/p' fake-ha.log | head -n1)"
+          test -n "$port"
+          kill -0 "$pid"
+          nc -z 127.0.0.1 "$port"
+          echo "FAKE_HA_PORT=$port" >> "$GITHUB_ENV"
+          echo "Using isolated fake HA port $port"
       - name: Run unit tests on iOS 27
         run: |
           set -o pipefail
