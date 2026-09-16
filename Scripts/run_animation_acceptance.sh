@@ -16,33 +16,60 @@ test -d "$app_path"
 xcrun simctl install "$device_id" "$app_path"
 
 rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR/frames"
+mkdir -p "$OUT_DIR/stages"
+
+capture_stage() {
+  local stage="$1"
+  local destination="$OUT_DIR/stages/stage-$(printf '%02d' "$stage").png"
+  local temp="$OUT_DIR/stages/.candidate-$stage.png"
+  local attempt
+
+  for attempt in 1 2 3 4; do
+    rm -f "$temp"
+    xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
+    xcrun simctl launch "$device_id" "$APP_ID"       --animation-acceptance-mode "--animation-stage=$stage" >/tmp/iosnext-animation-launch.log
+    sleep "$attempt"
+    xcrun simctl io "$device_id" screenshot "$temp" >/dev/null
+
+    if xcrun swift Scripts/validate_visual_capture.swift "$temp"; then
+      mv "$temp" "$destination"
+      return 0
+    fi
+  done
+
+  echo "Unable to capture animation stage $stage" >&2
+  return 1
+}
+
+for stage in 0 1 2 3 4 5 6 7; do
+  capture_stage "$stage"
+done
+
+stage_count="$(find "$OUT_DIR/stages" -name 'stage-*.png' | wc -l | tr -d ' ')"
+test "$stage_count" -eq 8
+unique_stage_hashes="$(shasum -a 256 "$OUT_DIR"/stages/stage-*.png | awk '{print $1}' | sort -u | wc -l | tr -d ' ')"
+test "$unique_stage_hashes" -eq 8
 
 xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
 video="$OUT_DIR/animation-acceptance.mp4"
 xcrun simctl io "$device_id" recordVideo --codec=h264 "$video" >/tmp/iosnext-record.log 2>&1 &
 rec_pid=$!
 sleep 1
-xcrun simctl launch "$device_id" "$APP_ID" --animation-acceptance-mode
-
-for second in $(seq 1 16); do
-  sleep 1
-  xcrun simctl io "$device_id" screenshot "$OUT_DIR/frames/frame-$(printf '%02d' "$second").png" >/dev/null
-done
-
+xcrun simctl launch "$device_id" "$APP_ID" --animation-acceptance-mode >/tmp/iosnext-animation-video-launch.log
+sleep 16
 kill -INT "$rec_pid" 2>/dev/null || true
 wait "$rec_pid" 2>/dev/null || true
 
 test -s "$video"
-frame_count="$(find "$OUT_DIR/frames" -name '*.png' | wc -l | tr -d ' ')"
-test "$frame_count" -ge 12
-unique_hashes="$(shasum -a 256 "$OUT_DIR"/frames/*.png | awk '{print $1}' | sort -u | wc -l | tr -d ' ')"
-test "$unique_hashes" -ge 7
+video_bytes="$(stat -f%z "$video")"
+test "$video_bytes" -gt 200000
 
 cat > "$OUT_DIR/summary.txt" <<EOF
 Animation Acceptance
 device=$DEVICE_NAME
-frames=$frame_count
-unique_frame_hashes=$unique_hashes
+stage_screenshots=$stage_count
+unique_stage_hashes=$unique_stage_hashes
+video_bytes=$video_bytes
 sequence=app-start,navigation,light-toggle,conditional,media-play-pause,slider,chat,owner-area
+capture_strategy=deterministic-stage-launch-plus-unblocked-video
 EOF

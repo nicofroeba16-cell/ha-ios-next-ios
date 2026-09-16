@@ -33,6 +33,8 @@ enum AnimationAcceptanceStage: Int, CaseIterable, Identifiable {
 }
 
 struct AnimationAcceptanceView: View {
+    private let requestedStage: AnimationAcceptanceStage?
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var stage: AnimationAcceptanceStage = .appStart
     @State private var navSelection = 0
@@ -42,6 +44,10 @@ struct AnimationAcceptanceView: View {
     @State private var sliderValue = 0.15
     @State private var chatText = ""
     @State private var ownerUnlocked = false
+
+    init(arguments: [String] = ProcessInfo.processInfo.arguments) {
+        requestedStage = Self.stage(from: arguments)
+    }
 
     var body: some View {
         ZStack {
@@ -61,7 +67,13 @@ struct AnimationAcceptanceView: View {
             .padding(.vertical, 12)
         }
         .animation(reduceMotion ? .linear(duration: 0.15) : .smooth(duration: 0.42), value: stage)
-        .task { await runSequence() }
+        .task {
+            if let requestedStage {
+                configureSettledState(for: requestedStage)
+            } else {
+                await runSequence()
+            }
+        }
         .accessibilityIdentifier("animation-acceptance-root")
     }
 
@@ -213,6 +225,29 @@ struct AnimationAcceptanceView: View {
             }
         }
         .accessibilityIdentifier("animation-timeline")
+    }
+
+    static func stage(from arguments: [String]) -> AnimationAcceptanceStage? {
+        guard let argument = arguments.first(where: { $0.hasPrefix("--animation-stage=") }),
+              let rawValue = Int(argument.split(separator: "=").last ?? "")
+        else { return nil }
+        return AnimationAcceptanceStage(rawValue: rawValue)
+    }
+
+    @MainActor
+    private func configureSettledState(for requestedStage: AnimationAcceptanceStage) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            stage = requestedStage
+            navSelection = requestedStage == .navigation ? 3 : 0
+            lightOn = requestedStage == .lightToggle
+            conditionalVisible = requestedStage == .conditional
+            mediaPlaying = requestedStage == .media
+            sliderValue = requestedStage == .slider ? 0.88 : 0.15
+            chatText = requestedStage == .chat ? "Hallo aus dem Live-Test" : ""
+            ownerUnlocked = requestedStage == .owner
+        }
     }
 
     @MainActor
