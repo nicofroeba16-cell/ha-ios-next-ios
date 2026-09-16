@@ -15,6 +15,8 @@ ipad_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.
 
 test -n "$iphone_id"
 test -n "$ipad_id"
+iphone_booted=0
+ipad_booted=0
 printf 'iphone=%s\nipad=%s\n' "$iphone_id" "$ipad_id" | tee "$OUT_DIR/devices.txt"
 
 xcrun simctl help ui 2>&1 | tee "$OUT_DIR/simctl-ui-help.txt"
@@ -54,6 +56,19 @@ record_accessibility_state() {
   } | tee "$OUT_DIR/$name-settings.txt"
 }
 
+cleanup_accessibility_state() {
+  set +e
+  if [ "$iphone_booted" -eq 1 ]; then
+    xcrun simctl terminate "$iphone_id" de.nicofroeba16.iosnext 2>/dev/null || true
+    reset_accessibility "$iphone_id"
+  fi
+  if [ "$ipad_booted" -eq 1 ]; then
+    xcrun simctl terminate "$ipad_id" de.nicofroeba16.iosnext 2>/dev/null || true
+    reset_accessibility "$ipad_id"
+  fi
+}
+trap cleanup_accessibility_state EXIT
+
 run_accessibility_variant() {
   local name="$1"
   local test_name="$2"
@@ -76,6 +91,7 @@ run_accessibility_variant() {
 
 xcrun simctl boot "$iphone_id" 2>/dev/null || true
 xcrun simctl bootstatus "$iphone_id" -b
+iphone_booted=1
 reset_accessibility "$iphone_id"
 xcrun simctl terminate "$iphone_id" de.nicofroeba16.iosnext 2>/dev/null || true
 
@@ -106,6 +122,7 @@ reset_accessibility "$iphone_id"
 
 xcrun simctl boot "$ipad_id" 2>/dev/null || true
 xcrun simctl bootstatus "$ipad_id" -b
+ipad_booted=1
 reset_accessibility "$ipad_id"
 xcrun simctl terminate "$ipad_id" de.nicofroeba16.iosnext 2>/dev/null || true
 
