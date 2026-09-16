@@ -6,7 +6,7 @@ SCHEME="IOSNext"
 IPHONE_NAME="iPhone 17 Pro"
 OUT_DIR="UIAcceptance"
 
-: "${DERIVED_DATA_PATH:?DERIVED_DATA_PATH must point to this run's isolated DerivedData}"
+: "${DERIVED_DATA_PATH:?DERIVED_DATA_PATH must point to the current isolated DerivedData}"
 test -d "$DERIVED_DATA_PATH"
 test_run_args=(-project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DERIVED_DATA_PATH")
 test_run_source="derived-data:$DERIVED_DATA_PATH"
