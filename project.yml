@@ -56,6 +56,12 @@ targets:
     platform: iOS
     info:
       path: WireGuard/PacketTunnel-Info.plist
+      properties:
+        CFBundleDisplayName: iOS Next WireGuard
+        IOSNextWireGuardKeychainAccessGroup: "$(AppIdentifierPrefix)de.nicofroeba16.iosnext.shared"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).PacketTunnelProvider"
     sources:
       - WireGuard/PacketTunnelProvider.swift
       - WireGuard/ValidatedWireGuardConfiguration+WireGuardKit.swift

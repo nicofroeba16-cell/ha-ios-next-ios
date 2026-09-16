@@ -34,15 +34,20 @@ jobs:
           go version
       - name: Portable security and backend tests
         run: bash Scripts/validate_without_macos.sh
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Ensure XcodeGen
+        run: |
+          set -euo pipefail
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+          else
+            brew install xcodegen
+          fi
       - name: Prepare pinned WireGuard source
         run: bash Scripts/prepare_wireguard_dependency.sh
       - name: Generate project
         run: |
           set -euo pipefail
           xcodegen generate
-          xcodebuild -resolvePackageDependencies -project IOSNext.xcodeproj -scheme IOSNext
       - name: Verify pinned WireGuard source
         run: |
           set -euo pipefail
