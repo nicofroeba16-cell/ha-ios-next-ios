@@ -1,60 +1,88 @@
 # CI Runtime Baseline
 
-Baseline source: successful GitHub Actions runs on `codex/ios27-owner-control`, captured before any runtime optimization.
+This file distinguishes the **current test matrix** from an older successful gate so runtime wins cannot be overstated.
 
-## Wall clock
+## Canonical current baseline
 
-| Gate | Run | Wall clock |
-| --- | ---: | ---: |
-| Fast Gate | #16 / 35097789422 | 260.6 s (4m 20.6s) |
-| Full Gate | #40 / 35094321720 | 914.2 s (15m 14.2s) |
+Source commit before runtime optimization: `f977078802b3518256543ccada37e343e66024d0`.
 
-The Fast Gate wall clock is governed by the macOS/Xcode job; its portable Linux job completed in 5.7 seconds in Run #16.
+| Gate | Run | Result | Wall clock |
+| --- | ---: | --- | ---: |
+| Fast Gate | #16 / 35097789422 | success | 260.6 s (4m 20.6s) |
+| Full Gate | #43 / 35097789404 | failure | 1678.6 s (27m 58.6s) to failure |
 
-## Full Gate step baseline
+The current Full Gate cannot produce a green end-to-end baseline because its UI matrix contains a pre-existing orchestration defect: method-level `-skip-testing` selectors omit the test-class component, so the intended exclusions do not take effect. Accessibility-state tests and the iPad-only test therefore execute inside the standard iPhone shard. Five accessibility tests fail there and Xcode then spends roughly 600 seconds collecting failure diagnostics.
 
-Measured from GitHub Actions log timestamps for successful Run #40:
+This failure is itself the canonical **BEFORE** state. The first optimization corrects sharding without removing any test: every state-specific test remains scheduled in its dedicated real simulator state, the iPad test remains scheduled on iPad, and the default accessibility render test remains on the standard iPhone shard.
+
+## Current Full Gate step baseline (#43)
+
+Measured from GitHub Actions log timestamps:
 
 | Step | Seconds |
 | --- | ---: |
-| Checkout | 1.4 |
-| Go setup | 2.5 |
-| Environment/device discovery | 5.1 |
-| Portable security/backend | 39.4 |
-| Ensure XcodeGen | 1.7 |
-| Prepare WireGuard | 2.6 |
-| XcodeGen | 0.1 |
-| WireGuard verification | 0.1 |
-| Build-for-testing | 52.4 |
-| Packet tunnel metadata | 0.5 |
-| Launch-screen verification | 0.3 |
-| Unit tests | 167.8 |
-| Product UI acceptance | 310.3 |
-| HA card capture | 245.1 |
-| Animation acceptance | 68.3 |
-| Evidence upload | 15.0 |
+| Checkout | ~1 |
+| Go setup | ~2 |
+| Environment/device discovery | ~5 |
+| Portable security/backend | ~39 |
+| Ensure XcodeGen | ~2 |
+| Prepare WireGuard | ~3 |
+| XcodeGen + WireGuard verification | <1 |
+| Build-for-testing | ~51 |
+| Packet tunnel + launch-screen verification | ~1 |
+| Unit-test harness | ~238 |
+| UI acceptance matrix until failure | ~1316 |
+| Failure evidence upload | ~18 |
 
-The three visual/UI acceptance blocks alone consumed 623.7 seconds (10m 23.7s) serially.
+Within the failed standard iPhone XCUITest invocation:
 
-## Fast Gate step baseline
+- `testPrimaryProductScreensRenderLightAndDark`: 312.418 s
+- `testIPadPortraitLandscapeCoreScreens` incorrectly ran on iPhone: 78.516 s
+- five accessibility-state tests ran under the wrong/default state and failed
+- post-failure simulator diagnostics timed out after 600 s
 
-Latest green Run #16:
+## Fast Gate details (#16)
 
 - build-for-testing: 63.5 s
-- unit tests: 181.1 s
-- total macOS job: 260.6 s
+- unit-test harness: 181.1 s
+- actual 19 XCTest methods: about 5.0 s total suite time, about 0.55 s measured test execution
+- silent harness/startup gap before the first test process: about 153 s
+- portable Linux job: 5.7 s
 
-For comparison, green Run #13 measured 48.2 s build and 246.7 s unit-test time, demonstrating meaningful runner/test variance.
+This makes simulator/Xcode test-harness startup, not Swift assertion execution, the primary Fast Gate target.
 
-## Instrumentation gap and baseline rule
+## Historical successful reference only
 
-Historical workflow logs do not expose exact internal simulator boot, app install, app launch, app termination, screenshot, or per-XCUITest-process startup timings because the scripts did not record them. This commit adds measurement only; it does not optimize behavior.
+Full Gate #40 / 35094321720 completed in 914.2 s (15m 14.2s), but it predates the expanded accessibility/device matrix and is therefore **not** the canonical current baseline.
 
-The first green run of `codex/ci-runtime-optimization` is therefore the canonical instrumented baseline for those internal metrics. Optimization commits must compare against that run, not against theoretical estimates.
+Its measured large blocks were:
+
+- unit tests: 167.8 s
+- product UI acceptance: 310.3 s
+- HA card capture: 245.1 s
+- animation acceptance: 68.3 s
+- evidence upload: 15.0 s
+
+The three visual/UI blocks alone consumed 623.7 s.
+
+## Instrumentation
+
+Commit `3045976a8085d22a958847b12d5abd7f306761b2` added measurement only:
+
+- build/test durations
+- simulator boot durations/counts
+- app install durations/counts
+- app launch/termination counts in shell-driven acceptance
+- xcodebuild invocation counts
+- machine-readable runtime artifacts
+
+Historical logs cannot recover every internal counter, so later before/after comparisons use the closest instrumented predecessor plus the canonical current runs above.
 
 ## Optimization invariants
 
 - No test is removed or skipped for speed.
+- Accessibility settings are set on the real simulator, not simulated in assertions.
+- iPhone and iPad coverage remain separate where device semantics matter.
 - No product behavior, Home Assistant semantics, WireGuard behavior, owner/admin behavior, security model, or visual design is changed.
-- Test-only orchestration may be changed only if assertions and evidence coverage remain equivalent or stronger.
-- Each optimization is benchmarked against this baseline and the immediately preceding green commit.
+- Test-only instrumentation/routing may change only when assertions and evidence remain equivalent or stronger.
+- Every runtime optimization is benchmarked against the immediately preceding comparable run.

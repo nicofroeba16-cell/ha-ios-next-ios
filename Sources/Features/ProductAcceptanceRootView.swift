@@ -57,6 +57,27 @@ struct ProductAcceptanceRootView: View {
 .preferredColorScheme(options.colorScheme)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("product-acceptance-\(screen.rawValue)")
+        .overlay(alignment: .topLeading) {
+            accessibilityProbe
+        }
+    }
+
+    private var accessibilityStateSummary: String {
+        [
+            "dynamicTypeAccessibility=\(dynamicTypeSize.isAccessibilitySize)",
+            "reduceMotion=\(reduceMotion)",
+            "reduceTransparency=\(reduceTransparency)",
+            "increasedContrast=\(colorSchemeContrast == .increased)"
+        ].joined(separator: ";")
+    }
+
+    private var accessibilityProbe: some View {
+        Text("Accessibility state")
+            .font(.system(size: 1))
+            .foregroundStyle(.clear)
+            .frame(width: 1, height: 1)
+            .accessibilityIdentifier("accessibility-state-probe")
+            .accessibilityValue(accessibilityStateSummary)
     }
 
     @ViewBuilder
