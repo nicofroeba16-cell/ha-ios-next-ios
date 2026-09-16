@@ -14,7 +14,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  portable:
+    name: Portable security/backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run portable validation
+        run: bash Scripts/validate_without_macos.sh
+
   xcode-27:
+    name: Xcode 27 full acceptance
+    needs: portable
     runs-on: xcode-27
     env:
       CI_RUNTIME_SCOPE: full
@@ -58,8 +69,6 @@ jobs:
               exit 1
               ;;
           esac
-      - name: Portable security and backend tests
-        run: bash Scripts/validate_without_macos.sh
       - name: Ensure XcodeGen
         run: |
           set -euo pipefail
