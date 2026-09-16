@@ -191,6 +191,10 @@ jobs:
         if: failure()
         run: cat fake-ha.log || true
 
+      - name: Capture Dark Mode app screenshots and videos
+        if: success()
+        run: bash Scripts/run_dark_visual_acceptance.sh
+
       - name: Stop fake Home Assistant test server
         if: always()
         run: |
@@ -223,3 +227,4 @@ jobs:
             UIAcceptance
             CardScreenshots
             AnimationAcceptance
+            DarkVisualAcceptance
