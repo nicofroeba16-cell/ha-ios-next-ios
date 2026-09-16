@@ -104,16 +104,8 @@ jobs:
             -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
             | tee -a xcodebuild.log
-      - name: Run real product UI acceptance tests
-        run: |
-          set -o pipefail
-          xcodebuild test-without-building \
-            -project IOSNext.xcodeproj \
-            -scheme IOSNext \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
-            -only-testing:IOSNextUITests \
-            -resultBundlePath UITestResults.xcresult \
-            | tee -a xcodebuild.log
+      - name: Run real product UI acceptance matrix
+        run: bash Scripts/run_ui_acceptance_matrix.sh
       - name: Capture and validate live HA card catalog
         if: success()
         run: bash Scripts/capture_live_card_screenshots.sh
@@ -132,6 +124,8 @@ jobs:
             packet-tunnel-entitlements.log
             launch-screen-metadata.log
             TestResults.xcresult
-            UITestResults.xcresult
+            UITestResults-iPhone.xcresult
+            UITestResults-iPad.xcresult
+            UIAcceptance
             CardScreenshots
             AnimationAcceptance

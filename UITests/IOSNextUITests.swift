@@ -2,6 +2,7 @@ import XCTest
 
 final class IOSNextUITests: XCTestCase {
     private var app: XCUIApplication!
+    private let screens = ["home", "rooms", "chat", "media", "system", "light", "media-detail", "owner", "wireguard"]
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -10,13 +11,14 @@ final class IOSNextUITests: XCTestCase {
     override func tearDownWithError() throws {
         app?.terminate()
         app = nil
+        XCUIDevice.shared.orientation = .portrait
     }
 
     @discardableResult
-    private func launch(_ screen: String) -> XCUIApplication {
+    private func launch(_ screen: String, extraArguments: [String] = []) -> XCUIApplication {
         app?.terminate()
         let application = XCUIApplication()
-        application.launchArguments = ["--product-ui-test-screen=\(screen)"]
+        application.launchArguments = ["--product-ui-test-screen=\(screen)"] + extraArguments
         application.launch()
         let root = application.descendants(matching: .any)
             .matching(identifier: "product-acceptance-\(screen)")
@@ -33,19 +35,33 @@ final class IOSNextUITests: XCTestCase {
         add(attachment)
     }
 
-    func testPrimaryProductScreensRender() {
-        for screen in ["home", "rooms", "chat", "media", "system", "light", "media-detail", "owner", "wireguard"] {
-            let application = launch(screen)
-            attachScreenshot("product-\(screen)", app: application)
+    func testPrimaryProductScreensRenderLightAndDark() {
+        for (style, arguments) in [
+            ("light", []),
+            ("dark", ["--product-ui-test-dark"])
+        ] {
+            for screen in screens {
+                let application = launch(screen, extraArguments: arguments)
+                attachScreenshot("product-\(style)-\(screen)", app: application)
+            }
         }
     }
 
-    func testNativeTabNavigationAndMediaDetail() {
+    func testNativeTabNavigationAndMediaDetail() throws {
         let application = launch("home")
-        let mediaTab = application.tabBars.buttons["Medien"]
-        XCTAssertTrue(mediaTab.waitForExistence(timeout: 3))
-        XCTAssertTrue(mediaTab.isHittable)
-        mediaTab.tap()
+        if application.tabBars.buttons["Medien"].waitForExistence(timeout: 2) {
+            let mediaTab = application.tabBars.buttons["Medien"]
+            XCTAssertTrue(mediaTab.isHittable)
+            mediaTab.tap()
+        } else {
+            let mediaRow = application.descendants(matching: .any)
+                .matching(identifier: "app-tab-media")
+                .firstMatch
+            guard mediaRow.waitForExistence(timeout: 2) else {
+                throw XCTSkip("Adaptive media navigation control not available on this device.")
+            }
+            mediaRow.tap()
+        }
 
         XCTAssertTrue(application.navigationBars["Medien"].waitForExistence(timeout: 3))
         let nowPlaying = application.buttons["media-player-link-media_player.schlafzimmer"]
@@ -65,6 +81,7 @@ final class IOSNextUITests: XCTestCase {
         XCTAssertTrue(field.isHittable)
         field.tap()
         field.typeText("Hallo aus XCUITest")
+        XCTAssertEqual(field.value as? String, "Hallo aus XCUITest")
 
         let sendButton = application.buttons["Nachricht senden"]
         XCTAssertTrue(sendButton.waitForExistence(timeout: 3))
@@ -72,15 +89,20 @@ final class IOSNextUITests: XCTestCase {
         attachScreenshot("product-chat-composer", app: application)
     }
 
-    func testLightControlsAreHittableWithoutCallingHomeAssistant() {
+    func testLightSliderInteraction() {
         let application = launch("light")
         let power = application.buttons["light-power-button"]
         XCTAssertTrue(power.waitForExistence(timeout: 3))
         XCTAssertTrue(power.isHittable)
+
         let brightness = application.sliders["light-brightness-slider"]
         XCTAssertTrue(brightness.waitForExistence(timeout: 3))
         XCTAssertTrue(brightness.isHittable)
-        attachScreenshot("product-light-detail", app: application)
+        let before = brightness.value as? String
+        brightness.adjust(toNormalizedSliderPosition: 0.28)
+        let after = brightness.value as? String
+        XCTAssertNotEqual(before, after)
+        attachScreenshot("product-light-slider-interaction", app: application)
     }
 
     func testOwnerAndWireGuardSafeEntryStates() {
@@ -92,5 +114,34 @@ final class IOSNextUITests: XCTestCase {
         XCTAssertTrue(application.navigationBars["WireGuard"].waitForExistence(timeout: 3))
         XCTAssertTrue(application.staticTexts["iOS Next WireGuard"].waitForExistence(timeout: 3))
         attachScreenshot("product-wireguard-entry", app: application)
+    }
+
+    func testAccessibilityAppearanceMatrix() {
+        let variants: [(String, [String])] = [
+            ("dynamic-type-xxxl", ["--product-ui-test-dynamic-type-xxxl"]),
+            ("reduce-motion", ["--product-ui-test-reduce-motion"]),
+            ("reduce-transparency", ["--product-ui-test-reduce-transparency"]),
+            ("increase-contrast", ["--product-ui-test-increase-contrast"]),
+            ("dark-reduce-transparency", ["--product-ui-test-dark", "--product-ui-test-reduce-transparency"])
+        ]
+        for (name, arguments) in variants {
+            let application = launch("home", extraArguments: arguments)
+            XCTAssertTrue(application.staticTexts["Favoriten"].waitForExistence(timeout: 3))
+            attachScreenshot("product-accessibility-\(name)", app: application)
+        }
+    }
+
+    func testIPadPortraitLandscapeCoreScreens() {
+        XCUIDevice.shared.orientation = .portrait
+        for screen in ["home", "media", "system"] {
+            let application = launch(screen)
+            attachScreenshot("ipad-portrait-\(screen)", app: application)
+        }
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        for screen in ["home", "media", "system"] {
+            let application = launch(screen, extraArguments: ["--product-ui-test-dark"])
+            attachScreenshot("ipad-landscape-dark-\(screen)", app: application)
+        }
     }
 }

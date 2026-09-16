@@ -23,13 +23,31 @@ enum ProductAcceptanceScreen: String, CaseIterable {
     }
 }
 
+private struct ProductAcceptanceOptions {
+    let colorScheme: ColorScheme?
+    let dynamicTypeSize: DynamicTypeSize
+    let reduceMotion: Bool
+    let reduceTransparency: Bool
+    let increasedContrast: Bool
+
+    init(arguments: [String]) {
+        colorScheme = arguments.contains("--product-ui-test-dark") ? .dark : .light
+        dynamicTypeSize = arguments.contains("--product-ui-test-dynamic-type-xxxl") ? .xxxLarge : .large
+        reduceMotion = arguments.contains("--product-ui-test-reduce-motion")
+        reduceTransparency = arguments.contains("--product-ui-test-reduce-transparency")
+        increasedContrast = arguments.contains("--product-ui-test-increase-contrast")
+    }
+}
+
 struct ProductAcceptanceRootView: View {
     private let screen: ProductAcceptanceScreen
+    private let options: ProductAcceptanceOptions
     @State private var appModel = AppModel.preview
     @State private var chatModel = ChatModel.preview
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         screen = Self.screen(from: arguments)
+        options = ProductAcceptanceOptions(arguments: arguments)
     }
 
     var body: some View {
@@ -40,6 +58,11 @@ struct ProductAcceptanceRootView: View {
                 standaloneScreen
             }
         }
+        .environment(\.dynamicTypeSize, options.dynamicTypeSize)
+        .environment(\.accessibilityReduceMotion, options.reduceMotion)
+        .environment(\.accessibilityReduceTransparency, options.reduceTransparency)
+        .environment(\.colorSchemeContrast, options.increasedContrast ? .increased : .standard)
+        .preferredColorScheme(options.colorScheme)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("product-acceptance-\(screen.rawValue)")
     }

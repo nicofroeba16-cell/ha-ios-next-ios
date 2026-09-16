@@ -65,6 +65,7 @@ struct AppShellView: View {
                 }
                 .tabItem { Label(tab.title, systemImage: tab.icon) }
                 .tag(tab)
+                .accessibilityIdentifier("app-tab-\(tab.rawValue)")
             }
         }
     }
@@ -74,6 +75,7 @@ struct AppShellView: View {
             List(AppTab.allCases, selection: $selectedTab) { tab in
                 Label(tab.title, systemImage: tab.icon)
                     .tag(tab)
+                    .accessibilityIdentifier("app-tab-\(tab.rawValue)")
             }
             .navigationTitle("iOS Next")
         } detail: {
