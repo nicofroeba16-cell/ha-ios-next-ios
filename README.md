@@ -5,7 +5,7 @@ Native iOS 27 SwiftUI client for Home Assistant. The app is intentionally separa
 ## Open the project
 
 1. Install Xcode 27 with the iOS 27 SDK and XcodeGen 2.38+ on macOS.
-2. Run `bash Scripts/prepare_wireguard_dependency.sh`. It checks out the exact audited WireGuard commit and applies only the required PackageDescription 5.5 compatibility line.
+2. Run `bash Scripts/prepare_wireguard_dependency.sh`. It checks out the exact audited WireGuard commit and applies only two Xcode 27 compatibility changes: PackageDescription 5.5 and the missing system-type header import.
 3. Run `xcodegen generate` in this directory.
 4. Open `IOSNext.xcodeproj`, select an iOS 27 simulator or device, then build.
 

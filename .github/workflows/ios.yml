@@ -48,8 +48,10 @@ jobs:
           set -euo pipefail
           checkout="$PWD/.build-dependencies/wireguard-apple"
           test "$(git -C "$checkout" rev-parse HEAD)" = "2fec12a6e1f6e3460b6ee483aa00ad29cddadab1"
-          test "$(git -C "$checkout" status --short)" = " M Package.swift"
-          test "$(git -C "$checkout" diff --name-only)" = "Package.swift"
+          expected_status=$' M Package.swift\n M Sources/WireGuardKitC/WireGuardKitC.h'
+          test "$(git -C "$checkout" status --short)" = "$expected_status"
+          expected_files=$'Package.swift\nSources/WireGuardKitC/WireGuardKitC.h'
+          test "$(git -C "$checkout" diff --name-only)" = "$expected_files"
           git -C "$checkout" diff --check
       - name: Build and test on iOS 27
         run: |

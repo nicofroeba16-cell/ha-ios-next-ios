@@ -18,18 +18,24 @@ if [[ "$actual_commit" != "$expected_commit" ]]; then
   exit 1
 fi
 
-status="$(git -C "$dependency_root" status --short)"
-if [[ -z "$status" ]]; then
+if head -n 1 "$dependency_root/Package.swift" | grep -Eq 'swift-tools-version:5\.3'; then
   perl -pi -e 's#swift-tools-version:5\.3#swift-tools-version:5.5#' \
     "$dependency_root/Package.swift"
-  status="$(git -C "$dependency_root" status --short)"
 fi
 
-if [[ "$status" != " M Package.swift" ]] || \
+if ! grep -Eq '^#include <sys/types\.h>$' \
+  "$dependency_root/Sources/WireGuardKitC/WireGuardKitC.h"; then
+  perl -0pi -e 's/#include "key\.h"/#include <sys\/types.h>\n\n#include "key.h"/' \
+    "$dependency_root/Sources/WireGuardKitC/WireGuardKitC.h"
+fi
+
+status="$(git -C "$dependency_root" status --short)"
+expected_status=$' M Package.swift\n M Sources/WireGuardKitC/WireGuardKitC.h'
+if [[ "$status" != "$expected_status" ]] || \
    ! head -n 1 "$dependency_root/Package.swift" | grep -Eq 'swift-tools-version:5\.5'; then
-  echo "WireGuard dependency differs from the one-file audited compatibility patch." >&2
+  echo "WireGuard dependency differs from the two-file audited compatibility patch." >&2
   git -C "$dependency_root" status --short >&2
   exit 1
 fi
 
-echo "Prepared WireGuardKit $expected_commit with PackageDescription 5.5 compatibility."
+echo "Prepared WireGuardKit $expected_commit with audited Xcode 27 compatibility."
