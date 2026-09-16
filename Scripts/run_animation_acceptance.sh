@@ -100,7 +100,6 @@ capture_stage() {
       done
 
       if [ "$ready" -eq 1 ]; then
-        sleep 0.20
         xcrun simctl io "$device_id" screenshot "$candidate" >/dev/null
         if xcrun swift Scripts/validate_visual_capture.swift "$candidate" >"$validation_log" 2>&1; then
           cp "$candidate" "$destination"
