@@ -5,48 +5,108 @@ DEVICE_NAME="${DEVICE_NAME:-iPhone 17 Pro}"
 APP_ID="de.nicofroeba16.iosnext"
 OUT_DIR="${OUT_DIR:-AnimationAcceptance}"
 APPEARANCE="${APPEARANCE:-light}"
+record_pid=""
 
 device_id="$(DEVICE_NAME="$DEVICE_NAME" xcrun simctl list devices available -j | DEVICE_NAME="$DEVICE_NAME" python3 -c 'import json,os,sys; name=os.environ["DEVICE_NAME"]; data=json.load(sys.stdin); print(next(device["udid"] for devices in data["devices"].values() for device in devices if device.get("isAvailable", True) and device["name"] == name))')"
 test -n "$device_id"
 xcrun simctl boot "$device_id" 2>/dev/null || true
 xcrun simctl bootstatus "$device_id" -b
-xcrun simctl ui "$device_id" appearance "$APPEARANCE"
 
-app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print -quit)"
+app_path="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path '*/Build/Products/Debug-iphonesimulator/IOSNext.app' -print | head -n 1)"
 test -d "$app_path"
+
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR/stages" "$OUT_DIR/logs"
+
+stop_recording() {
+  if [ -n "$record_pid" ]; then
+    kill -INT "$record_pid" 2>/dev/null || true
+    wait "$record_pid" 2>/dev/null || true
+    record_pid=""
+  fi
+}
+trap stop_recording EXIT
+
+set_visual_baseline() {
+  xcrun simctl ui "$device_id" appearance "$APPEARANCE"
+  xcrun simctl ui "$device_id" content_size large
+  xcrun simctl ui "$device_id" increase_contrast disabled
+  xcrun simctl spawn "$device_id" defaults write com.apple.Accessibility ReduceMotionEnabled -bool false
+  xcrun simctl spawn "$device_id" defaults write com.apple.Accessibility ReduceTransparencyEnabled -bool false
+  xcrun simctl spawn "$device_id" notifyutil -p com.apple.Accessibility.ReduceMotionStatusDidChange || true
+  xcrun simctl spawn "$device_id" notifyutil -p com.apple.Accessibility.ReduceTransparencyStatusDidChange || true
+
+  local state=""
+  for _ in {1..40}; do
+    state="$(xcrun simctl ui "$device_id" appearance 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+    if [[ "$state" == *"$APPEARANCE"* ]]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "Appearance failed to settle: expected=$APPEARANCE actual=$state" >&2
+  return 1
+}
+
+restart_simulator() {
+  stop_recording
+  xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
+  xcrun simctl shutdown "$device_id" 2>/dev/null || true
+  xcrun simctl boot "$device_id"
+  xcrun simctl bootstatus "$device_id" -b
+  set_visual_baseline
+  data_container="$(xcrun simctl get_app_container "$device_id" "$APP_ID" data)"
+  test -d "$data_container"
+}
+
+set_visual_baseline
+xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
+xcrun simctl uninstall "$device_id" "$APP_ID" 2>/dev/null || true
 xcrun simctl install "$device_id" "$app_path"
 data_container="$(xcrun simctl get_app_container "$device_id" "$APP_ID" data)"
 test -d "$data_container"
 
-rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR/stages"
-
 capture_stage() {
   local stage="$1"
   local destination="$OUT_DIR/stages/stage-$(printf '%02d' "$stage").png"
-  local temp="$OUT_DIR/stages/.candidate-$stage.png"
-  local attempt
+  local attempt nonce marker candidate launch_log validation_log
 
-  local marker="$data_container/tmp/iosnext-animation-stage-ready-$stage"
+  rm -f "$destination"
 
   for attempt in 1 2 3 4; do
-    rm -f "$temp" "$marker"
+    nonce="animation-$stage-$attempt-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    marker="$data_container/tmp/iosnext-animation-stage-ready-$stage-$nonce"
+    candidate="$OUT_DIR/logs/stage-$stage-attempt-$attempt.png"
+    launch_log="$OUT_DIR/logs/stage-$stage-attempt-$attempt-launch.log"
+    validation_log="$OUT_DIR/logs/stage-$stage-attempt-$attempt-validation.log"
+
+    rm -f "$marker" "$candidate" "$launch_log" "$validation_log"
     xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
-    xcrun simctl launch "$device_id" "$APP_ID" \
-      --animation-acceptance-mode "--animation-stage=$stage" >/tmp/iosnext-animation-launch.log
 
-    for _ in {1..50}; do
-      test -f "$marker" && break
-      sleep 0.1
-    done
-    test -f "$marker" || continue
+    if xcrun simctl launch "$device_id" "$APP_ID"       --animation-acceptance-mode       "--animation-stage=$stage"       "--visual-ready-nonce=$nonce"       >"$launch_log" 2>&1; then
+      ready=0
+      for _ in {1..80}; do
+        if [ -f "$marker" ]; then
+          ready=1
+          break
+        fi
+        sleep 0.1
+      done
 
-    sleep 0.15
-    xcrun simctl io "$device_id" screenshot "$temp" >/dev/null
+      if [ "$ready" -eq 1 ]; then
+        sleep 0.20
+        xcrun simctl io "$device_id" screenshot "$candidate" >/dev/null
+        if xcrun swift Scripts/validate_visual_capture.swift "$candidate" >"$validation_log" 2>&1; then
+          cp "$candidate" "$destination"
+          return 0
+        fi
+      else
+        echo "ready marker timeout: $marker" >"$validation_log"
+      fi
+    fi
 
-    if xcrun swift Scripts/validate_visual_capture.swift "$temp"; then
-      mv "$temp" "$destination"
-      return 0
+    if [ "$attempt" -eq 2 ]; then
+      restart_simulator
     fi
   done
 
@@ -63,19 +123,44 @@ test "$stage_count" -eq 8
 unique_stage_hashes="$(shasum -a 256 "$OUT_DIR"/stages/stage-*.png | awk '{print $1}' | sort -u | wc -l | tr -d ' ')"
 test "$unique_stage_hashes" -eq 8
 
-xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
-video="$OUT_DIR/animation-acceptance.mp4"
-xcrun simctl io "$device_id" recordVideo --codec=h264 "$video" >/tmp/iosnext-record.log 2>&1 &
-rec_pid=$!
-sleep 1
-xcrun simctl launch "$device_id" "$APP_ID" --animation-acceptance-mode >/tmp/iosnext-animation-video-launch.log
-sleep 16
-kill -INT "$rec_pid" 2>/dev/null || true
-wait "$rec_pid" 2>/dev/null || true
+record_animation_video() {
+  local video="$OUT_DIR/animation-acceptance.mp4"
+  local attempt bytes
 
-test -s "$video"
-video_bytes="$(stat -f%z "$video")"
-test "$video_bytes" -gt 200000
+  for attempt in 1 2 3; do
+    rm -f "$video"
+    xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
+
+    xcrun simctl io "$device_id" recordVideo --codec=h264 "$video"       >"$OUT_DIR/logs/video-attempt-$attempt-record.log" 2>&1 &
+    record_pid=$!
+    sleep 0.35
+
+    if ! xcrun simctl launch "$device_id" "$APP_ID"       --animation-acceptance-mode       "--visual-ready-nonce=animation-video-$attempt-$(uuidgen | tr '[:upper:]' '[:lower:]')"       >"$OUT_DIR/logs/video-attempt-$attempt-launch.log" 2>&1; then
+      stop_recording
+      continue
+    fi
+
+    sleep 16
+    stop_recording
+
+    if [ -s "$video" ]; then
+      bytes="$(stat -f%z "$video")"
+      if [ "$bytes" -gt 200000 ]; then
+        echo "$bytes"
+        return 0
+      fi
+    fi
+
+    if [ "$attempt" -eq 2 ]; then
+      restart_simulator
+    fi
+  done
+
+  echo "Unable to record valid animation video" >&2
+  return 1
+}
+
+video_bytes="$(record_animation_video)"
 
 cat > "$OUT_DIR/summary.txt" <<EOF
 Animation Acceptance
@@ -85,5 +170,7 @@ stage_screenshots=$stage_count
 unique_stage_hashes=$unique_stage_hashes
 video_bytes=$video_bytes
 sequence=app-start,navigation,light-toggle,conditional,media-play-pause,slider,chat,owner-area
-capture_strategy=app-ready-marker-plus-deterministic-stage-launch-plus-unblocked-video
+capture_strategy=nonce-ready-marker-plus-frame-settle-plus-validation
+video_retry=true
+simulator_restart_after_repeated_capture_failure=true
 EOF
