@@ -5,7 +5,7 @@ DEVICE_NAME="${DEVICE_NAME:-iPhone 17 Pro}"
 APP_ID="de.nicofroeba16.iosnext"
 OUT_DIR="${OUT_DIR:-AnimationAcceptance}"
 
-device_id="$(xcrun simctl list devices available | awk -F '[()]' -v name="$DEVICE_NAME" '$0 ~ name " \\(" {print $2; exit}')"
+device_id="$(DEVICE_NAME="$DEVICE_NAME" xcrun simctl list devices available -j | DEVICE_NAME="$DEVICE_NAME" python3 -c 'import json,os,sys; name=os.environ["DEVICE_NAME"]; data=json.load(sys.stdin); print(next(device["udid"] for devices in data["devices"].values() for device in devices if device.get("isAvailable", True) and device["name"] == name))')"
 test -n "$device_id"
 xcrun simctl boot "$device_id" 2>/dev/null || true
 xcrun simctl bootstatus "$device_id" -b
