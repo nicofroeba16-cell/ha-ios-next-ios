@@ -1,0 +1,48 @@
+name: iOS 27 Animation Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-27-animation-acceptance
+  cancel-in-progress: false
+
+jobs:
+  animation-acceptance:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Activate pinned Go toolchain
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.25.14
+          cache: false
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Prepare pinned WireGuard source
+        run: bash Scripts/prepare_wireguard_dependency.sh
+      - name: Generate project
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -resolvePackageDependencies -project IOSNext.xcodeproj -scheme IOSNext
+      - name: Build animation test app
+        run: |
+          set -o pipefail
+          xcodebuild build             -project IOSNext.xcodeproj             -scheme IOSNext             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0'             CODE_SIGNING_ALLOWED=NO             | tee animation-build.log
+      - name: Record and validate animation sequence
+        run: bash Scripts/run_animation_acceptance.sh
+      - name: Upload animation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-27-animation-acceptance
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            animation-build.log
+            AnimationAcceptance
