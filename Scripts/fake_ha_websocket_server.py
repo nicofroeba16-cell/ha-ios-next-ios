@@ -283,10 +283,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18765)
+    parser.add_argument("--port-file")
     args = parser.parse_args()
 
     with Server((args.host, args.port), Handler) as server:
         actual_port = server.server_address[1]
+        if args.port_file:
+            with open(args.port_file, "w", encoding="utf-8") as handle:
+                handle.write(str(actual_port))
+                handle.flush()
         print(f"fake-ha-listening={args.host}:{actual_port}", flush=True)
         server.serve_forever()
 
