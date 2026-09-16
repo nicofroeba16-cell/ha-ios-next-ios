@@ -78,3 +78,6 @@ targets:
       - Tests
     dependencies:
       - target: IOSNext
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
