@@ -68,8 +68,9 @@ test -d "$data_container"
 
 capture_stage() {
   local stage="$1"
-  local destination="$OUT_DIR/stages/stage-$(printf '%02d' "$stage").png"
+  local destination
   local attempt nonce marker candidate launch_log validation_log
+  destination="$OUT_DIR/stages/stage-$(printf '%02d' "$stage").png"
 
   rm -f "$destination"
 
