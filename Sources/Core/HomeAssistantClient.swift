@@ -35,6 +35,34 @@ enum HomeAssistantClientError: LocalizedError {
     }
 }
 
+struct HomeAssistantClientTimingPolicy: Sendable {
+    let authHandshakeSeconds: Double
+    let getStatesSeconds: Double
+    let commandSeconds: Double
+    let heartbeatIntervalSeconds: Double
+    let pingTimeoutSeconds: Double
+
+    static let production = HomeAssistantClientTimingPolicy(
+        authHandshakeSeconds: 12,
+        getStatesSeconds: 15,
+        commandSeconds: 10,
+        heartbeatIntervalSeconds: 20,
+        pingTimeoutSeconds: 5
+    )
+
+    static let integrationTest = HomeAssistantClientTimingPolicy(
+        authHandshakeSeconds: 0.45,
+        getStatesSeconds: 0.45,
+        commandSeconds: 0.45,
+        heartbeatIntervalSeconds: 0.20,
+        pingTimeoutSeconds: 0.25
+    )
+
+    func commandTimeoutSeconds(for type: String) -> Double {
+        type == "get_states" ? getStatesSeconds : commandSeconds
+    }
+}
+
 actor HomeAssistantClient {
     private typealias Response = [String: JSONValue]
     private typealias ResponseContinuation = CheckedContinuation<Response, Error>
@@ -44,6 +72,7 @@ actor HomeAssistantClient {
         let timeoutTask: Task<Void, Never>
     }
 
+    private let timing: HomeAssistantClientTimingPolicy
     private var socket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
@@ -52,6 +81,10 @@ actor HomeAssistantClient {
     private var generation = 0
     private var stateContinuation: AsyncStream<HomeAssistantStateChange>.Continuation?
     private var stateStream: AsyncStream<HomeAssistantStateChange>?
+
+    init(timing: HomeAssistantClientTimingPolicy = .production) {
+        self.timing = timing
+    }
 
     func connect(configuration: HomeAssistantConfiguration) async throws -> [HomeAssistantEntity] {
         disconnect()
@@ -67,7 +100,10 @@ actor HomeAssistantClient {
         task.resume()
 
         do {
-            let required = try await receiveObject(from: task)
+            let required = try await receiveObject(
+                from: task,
+                timeoutSeconds: timing.authHandshakeSeconds
+            )
             guard required["type"]?.stringValue == "auth_required" else {
                 throw HomeAssistantClientError.invalidResponse
             }
@@ -76,7 +112,10 @@ actor HomeAssistantClient {
                 "access_token": .string(configuration.accessToken)
             ], through: task)
 
-            let authenticated = try await receiveObject(from: task)
+            let authenticated = try await receiveObject(
+                from: task,
+                timeoutSeconds: timing.authHandshakeSeconds
+            )
             guard authenticated["type"]?.stringValue == "auth_ok" else {
                 throw HomeAssistantClientError.server(
                     authenticated["message"]?.stringValue ?? "Anmeldung bei Home Assistant fehlgeschlagen."
@@ -147,13 +186,8 @@ actor HomeAssistantClient {
         ])
     }
 
-    static func commandTimeoutSeconds(for type: String) -> Double {
-        switch type {
-        case "get_states": 15
-        case "subscribe_events": 10
-        case "call_service": 10
-        default: 10
-        }
+    nonisolated static func commandTimeoutSeconds(for type: String) -> Double {
+        HomeAssistantClientTimingPolicy.production.commandTimeoutSeconds(for: type)
     }
 
     private func command(type: String, extra: Response = [:]) async throws -> Response {
@@ -163,7 +197,7 @@ actor HomeAssistantClient {
         var payload = extra
         payload["id"] = .number(Double(requestID))
         payload["type"] = .string(type)
-        let timeoutSeconds = Self.commandTimeoutSeconds(for: type)
+        let timeoutSeconds = timing.commandTimeoutSeconds(for: type)
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -205,9 +239,12 @@ actor HomeAssistantClient {
     private func heartbeatLoop(task: URLSessionWebSocketTask, generation activeGeneration: Int) async {
         while !Task.isCancelled, activeGeneration == generation {
             do {
-                try await Task.sleep(for: .seconds(20))
+                try await Task.sleep(for: .seconds(timing.heartbeatIntervalSeconds))
                 guard !Task.isCancelled, activeGeneration == generation else { return }
-                try await sendPing(through: task)
+                try await sendPing(
+                    through: task,
+                    timeoutSeconds: timing.pingTimeoutSeconds
+                )
             } catch is CancellationError {
                 return
             } catch {
@@ -217,14 +254,36 @@ actor HomeAssistantClient {
         }
     }
 
-    private func sendPing(through task: URLSessionWebSocketTask) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            task.sendPing { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
+    private func sendPing(
+        through task: URLSessionWebSocketTask,
+        timeoutSeconds: Double
+    ) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    task.sendPing { error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
+                    }
                 }
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeoutSeconds))
+                throw HomeAssistantClientError.timedOut
+            }
+
+            do {
+                _ = try await group.next()
+                group.cancelAll()
+            } catch {
+                if case HomeAssistantClientError.timedOut = error {
+                    task.cancel(with: .goingAway, reason: nil)
+                }
+                group.cancelAll()
+                throw error
             }
         }
     }
@@ -305,8 +364,42 @@ actor HomeAssistantClient {
         try await task.send(.string(text))
     }
 
-    private func receiveObject(from task: URLSessionWebSocketTask) async throws -> Response {
-        let message = try await task.receive()
+    private func receiveObject(
+        from task: URLSessionWebSocketTask,
+        timeoutSeconds: Double? = nil
+    ) async throws -> Response {
+        guard let timeoutSeconds else {
+            return try Self.decode(message: try await task.receive())
+        }
+
+        return try await withThrowingTaskGroup(of: Response.self) { group in
+            group.addTask {
+                try Self.decode(message: try await task.receive())
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeoutSeconds))
+                throw HomeAssistantClientError.timedOut
+            }
+
+            do {
+                guard let response = try await group.next() else {
+                    throw HomeAssistantClientError.disconnected
+                }
+                group.cancelAll()
+                return response
+            } catch {
+                if case HomeAssistantClientError.timedOut = error {
+                    task.cancel(with: .goingAway, reason: nil)
+                }
+                group.cancelAll()
+                throw error
+            }
+        }
+    }
+
+    nonisolated private static func decode(
+        message: URLSessionWebSocketTask.Message
+    ) throws -> Response {
         let text: String
         switch message {
         case let .string(value): text = value

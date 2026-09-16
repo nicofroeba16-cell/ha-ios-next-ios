@@ -94,6 +94,24 @@ jobs:
           grep -F "LaunchScreen-SBPartialInfo.plist" xcodebuild.log >/dev/null
           grep -F "CompileStoryboard" xcodebuild.log >/dev/null
 
+      - name: Start fake Home Assistant test server
+        run: |
+          set -euo pipefail
+          python3 -m py_compile Scripts/fake_ha_websocket_server.py
+          python3 Scripts/fake_ha_websocket_server.py --port 18765 > fake-ha.log 2>&1 &
+          echo $! > fake-ha.pid
+          ready=0
+          for _ in {1..40}; do
+            if nc -z 127.0.0.1 18765; then
+              ready=1
+              break
+            fi
+            sleep 0.1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat fake-ha.log
+            exit 1
+          fi
       - name: Run unit tests on iOS 27
         run: |
           set -o pipefail
@@ -104,6 +122,12 @@ jobs:
             -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
             | tee -a xcodebuild.log
+      - name: Stop fake Home Assistant test server
+        if: always()
+        run: |
+          if [ -f fake-ha.pid ]; then
+            kill "$(cat fake-ha.pid)" 2>/dev/null || true
+          fi
       - name: Run real product UI acceptance matrix
         run: bash Scripts/run_ui_acceptance_matrix.sh
       - name: Capture and validate live HA card catalog
@@ -123,6 +147,7 @@ jobs:
             xcodebuild.log
             packet-tunnel-entitlements.log
             launch-screen-metadata.log
+            fake-ha.log
             TestResults.xcresult
             UITestResults-iPhone.xcresult
             UITestResults-iPad.xcresult

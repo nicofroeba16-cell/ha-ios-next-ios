@@ -86,6 +86,24 @@ jobs:
           test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$appex_info")" = "com.apple.networkextension.packet-tunnel"
           test -n "$(plutil -extract NSExtension.NSExtensionPrincipalClass raw -o - "$appex_info")"
 
+      - name: Start fake Home Assistant test server
+        run: |
+          set -euo pipefail
+          python3 -m py_compile Scripts/fake_ha_websocket_server.py
+          python3 Scripts/fake_ha_websocket_server.py --port 18765 > fake-ha.log 2>&1 &
+          echo $! > fake-ha.pid
+          ready=0
+          for _ in {1..40}; do
+            if nc -z 127.0.0.1 18765; then
+              ready=1
+              break
+            fi
+            sleep 0.1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat fake-ha.log
+            exit 1
+          fi
       - name: Run tests without rebuilding
         run: |
           set -o pipefail
@@ -96,3 +114,11 @@ jobs:
             -only-testing:IOSNextTests \
             -resultBundlePath FastTestResults.xcresult \
             | tee -a xcodebuild-fast.log
+
+      - name: Stop fake Home Assistant test server
+        if: always()
+        run: |
+          if [ -f fake-ha.pid ]; then
+            kill "$(cat fake-ha.pid)" 2>/dev/null || true
+          fi
+

@@ -269,4 +269,182 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(ProductAcceptanceRootView.screen(from: ["app", "--product-ui-test-screen=invalid"]), .home)
     }
 
+    func testFireTVCompanionPreviewContract() throws {
+        let entity = try XCTUnwrap(
+            AppModel.preview.entities.first { $0.entityID == "media_player.fire_tv_companion" }
+        )
+        XCTAssertEqual(entity.domain, "media_player")
+        XCTAssertEqual(entity.state, "playing")
+        XCTAssertEqual(entity.mediaTitle, "Companion Testfilm")
+        XCTAssertEqual(entity.mediaContentType, "video")
+        XCTAssertEqual(entity.volumeLevel, 0.52, accuracy: 0.001)
+        XCTAssertEqual(entity.attributes["skip_interval_seconds"]?.numberValue, 10)
+    }
+
+    private func fakeHAConfiguration(_ mode: String) -> HomeAssistantConfiguration {
+        HomeAssistantConfiguration(
+            baseURL: URL(string: "http://127.0.0.1:18765?mode=\(mode)")!,
+            accessToken: "integration-test-token"
+        )
+    }
+
+    func testFakeHAWebSocketConnectAndServiceCall() async throws {
+        let client = HomeAssistantClient(timing: .integrationTest)
+        let states = try await client.connect(configuration: fakeHAConfiguration("normal"))
+        XCTAssertEqual(
+            Set(states.map(\.entityID)),
+            Set(["light.fake", "media_player.fire_tv_companion"])
+        )
+
+        let fireTV = try XCTUnwrap(
+            states.first { $0.entityID == "media_player.fire_tv_companion" }
+        )
+        XCTAssertEqual(fireTV.mediaContentType, "video")
+        XCTAssertEqual(fireTV.attributes["skip_interval_seconds"]?.numberValue, 10)
+
+        try await client.callService(
+            domain: "light",
+            service: "turn_on",
+            targetEntityID: "light.fake"
+        )
+        await client.disconnect()
+    }
+
+    func testFakeHAFireTVCompanionPauseProducesStateEvent() async throws {
+        let client = HomeAssistantClient(timing: .integrationTest)
+        _ = try await client.connect(configuration: fakeHAConfiguration("normal"))
+        let stream = await client.stateChanges()
+        let paused = expectation(description: "Fire TV Companion publishes paused state")
+
+        let observer = Task {
+            for await change in stream {
+                if change.entityID == "media_player.fire_tv_companion",
+                   change.newState?.state == "paused" {
+                    paused.fulfill()
+                    break
+                }
+            }
+        }
+
+        try await client.callService(
+            domain: "media_player",
+            service: "media_pause",
+            targetEntityID: "media_player.fire_tv_companion"
+        )
+
+        await fulfillment(of: [paused], timeout: 2.0)
+        observer.cancel()
+        await client.disconnect()
+    }
+
+    func testFakeHAAuthHandshakeTimeout() async {
+        let client = HomeAssistantClient(timing: .integrationTest)
+
+        do {
+            _ = try await client.connect(configuration: fakeHAConfiguration("auth_stall"))
+            XCTFail("Auth handshake should have timed out.")
+        } catch HomeAssistantClientError.timedOut {
+            // Expected.
+        } catch {
+            XCTFail("Unexpected auth timeout error: \(error)")
+        }
+
+        await client.disconnect()
+    }
+
+    func testFakeHACommandTimeout() async throws {
+        let client = HomeAssistantClient(timing: .integrationTest)
+        _ = try await client.connect(configuration: fakeHAConfiguration("call_stall"))
+
+        do {
+            try await client.callService(
+                domain: "light",
+                service: "turn_off",
+                targetEntityID: "light.fake"
+            )
+            XCTFail("Stalled service call should have timed out.")
+        } catch HomeAssistantClientError.timedOut {
+            // Expected.
+        } catch {
+            XCTFail("Unexpected command timeout error: \(error)")
+        }
+
+        await client.disconnect()
+    }
+
+    func testFakeHAHalfOpenConnectionIsDetectedByHeartbeat() async throws {
+        let client = HomeAssistantClient(timing: .integrationTest)
+        _ = try await client.connect(configuration: fakeHAConfiguration("no_pong"))
+        let stream = await client.stateChanges()
+        let finished = expectation(description: "state stream finishes after missing pong")
+
+        let observer = Task {
+            for await _ in stream {}
+            finished.fulfill()
+        }
+
+        await fulfillment(of: [finished], timeout: 2.0)
+        observer.cancel()
+        await client.disconnect()
+    }
+
+    func testFakeHAServerDisconnectFinishesStateStream() async throws {
+        let client = HomeAssistantClient(timing: .integrationTest)
+        _ = try await client.connect(configuration: fakeHAConfiguration("close_after_subscribe"))
+        let stream = await client.stateChanges()
+        let finished = expectation(description: "state stream finishes after server disconnect")
+
+        let observer = Task {
+            for await _ in stream {}
+            finished.fulfill()
+        }
+
+        await fulfillment(of: [finished], timeout: 2.0)
+        observer.cancel()
+        await client.disconnect()
+    }
+
+    @MainActor
+    func testAppModelReconnectsAfterFakeHAServerDrop() async throws {
+        let model = AppModel()
+        await model.connect(
+            serverURL: URL(string: "http://127.0.0.1:18765?mode=close_once")!,
+            accessToken: "integration-test-token",
+            persist: false
+        )
+        XCTAssertTrue(model.isConnected)
+        XCTAssertNotNil(
+            model.entities.first { $0.entityID == "media_player.fire_tv_companion" }
+        )
+
+        var sawReconnectState = false
+        var restored = false
+
+        for _ in 0..<120 {
+            try await Task.sleep(for: .milliseconds(50))
+
+            if case .connecting = model.connectionState {
+                sawReconnectState = true
+            }
+
+            if sawReconnectState,
+               model.isConnected,
+               model.entities.contains(where: { $0.entityID == "media_player.fire_tv_companion" }) {
+                restored = true
+                break
+            }
+        }
+
+        XCTAssertTrue(
+            sawReconnectState,
+            "Expected a reconnecting state after the fake server dropped the socket."
+        )
+        XCTAssertTrue(
+            restored,
+            "Expected AppModel to reconnect and restore the Fire TV Companion entity."
+        )
+        model.disconnect()
+    }
+
+
 }
