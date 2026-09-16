@@ -128,10 +128,11 @@ done
 
 record_cold_launch() {
   local video="$OUT_DIR/cold-launch-dark.mp4"
-  local attempt bytes
+  local attempt bytes validation_log
 
   for attempt in 1 2 3; do
-    rm -f "$video"
+    validation_log="$OUT_DIR/logs/cold-launch-attempt-$attempt-validation.log"
+    rm -f "$video" "$validation_log"
     xcrun simctl terminate "$device_id" "$APP_ID" 2>/dev/null || true
 
     xcrun simctl io "$device_id" recordVideo --codec=h264 "$video"       >"$OUT_DIR/logs/cold-launch-attempt-$attempt-record.log" 2>&1 &
@@ -148,7 +149,7 @@ record_cold_launch() {
 
     if [ -s "$video" ]; then
       bytes="$(stat -f%z "$video")"
-      if [ "$bytes" -gt 50000 ]; then
+      if [ "$bytes" -gt 50000 ]         && xcrun swift Scripts/validate_visual_video.swift "$video" cold >"$validation_log" 2>&1; then
         echo "$bytes"
         return 0
       fi
@@ -181,6 +182,7 @@ reduce_transparency=false
 product_screens=$screen_count
 unique_product_screen_hashes=$unique_screen_hashes
 cold_launch_video_bytes=$cold_bytes
+cold_launch_frame_validation=true
 normal_launch_has_test_arguments=false
 product_capture_uses_nonce_ready_marker=true
 product_capture_validates_each_attempt=true
