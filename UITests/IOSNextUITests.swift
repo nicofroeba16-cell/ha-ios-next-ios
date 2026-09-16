@@ -35,13 +35,48 @@ final class IOSNextUITests: XCTestCase {
         add(attachment)
     }
 
+    private func waitForProductRoute(
+        _ screen: String,
+        style: String,
+        in application: XCUIApplication,
+        timeout: TimeInterval = 5
+    ) {
+        let ready = application.staticTexts["product-acceptance-ready-\(screen)-\(style)"].firstMatch
+        XCTAssertTrue(
+            ready.waitForExistence(timeout: timeout),
+            "Product route did not become ready: \(style)/\(screen)"
+        )
+
+        let root = application.descendants(matching: .any)
+            .matching(identifier: "product-acceptance-\(screen)")
+            .firstMatch
+        XCTAssertTrue(
+            root.waitForExistence(timeout: timeout),
+            "Product screen did not render after route: \(screen)"
+        )
+    }
+
+    private func routeProduct(
+        _ screen: String,
+        style: String,
+        in application: XCUIApplication
+    ) {
+        guard let url = URL(string: "iosnext://ci-product?screen=\(screen)&style=\(style)") else {
+            return XCTFail("Unable to build product acceptance URL")
+        }
+        XCUIDevice.shared.system.open(url)
+        waitForProductRoute(screen, style: style, in: application)
+    }
+
     func testPrimaryProductScreensRenderLightAndDark() {
-        for (style, arguments) in [
-            ("light", []),
-            ("dark", ["--product-ui-test-dark"])
-        ] {
+        let application = launch("home")
+        waitForProductRoute("home", style: "light", in: application)
+
+        for style in ["light", "dark"] {
             for screen in screens {
-                let application = launch(screen, extraArguments: arguments)
+                if style != "light" || screen != "home" {
+                    routeProduct(screen, style: style, in: application)
+                }
                 attachScreenshot("product-\(style)-\(screen)", app: application)
             }
         }
@@ -155,14 +190,18 @@ final class IOSNextUITests: XCTestCase {
 
     func testIPadPortraitLandscapeCoreScreens() {
         XCUIDevice.shared.orientation = .portrait
-        for screen in ["home", "media", "system"] {
-            let application = launch(screen)
+        let application = launch("home")
+        waitForProductRoute("home", style: "light", in: application)
+        attachScreenshot("ipad-portrait-home", app: application)
+
+        for screen in ["media", "system"] {
+            routeProduct(screen, style: "light", in: application)
             attachScreenshot("ipad-portrait-\(screen)", app: application)
         }
 
         XCUIDevice.shared.orientation = .landscapeLeft
         for screen in ["home", "media", "system"] {
-            let application = launch(screen, extraArguments: ["--product-ui-test-dark"])
+            routeProduct(screen, style: "dark", in: application)
             attachScreenshot("ipad-landscape-dark-\(screen)", app: application)
         }
     }
