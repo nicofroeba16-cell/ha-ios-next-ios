@@ -1,0 +1,77 @@
+name: iOS 27 Fast Gate (Prepared)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-27-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    name: Portable security/backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run portable validation
+        run: bash Scripts/validate_without_macos.sh
+
+  ios-fast:
+    name: Xcode 27 build/test
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Activate pinned Go toolchain
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.25.14
+          cache: false
+
+      - name: Prove Xcode 27 environment
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
+          xcrun simctl list devices available | grep -F "iPhone 17 Pro"
+          go version
+
+      - name: Ensure XcodeGen
+        run: |
+          set -euo pipefail
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+          else
+            brew install xcodegen
+          fi
+
+      - name: Prepare pinned WireGuard source
+        run: bash Scripts/prepare_wireguard_dependency.sh
+
+      - name: Generate project
+        run: |
+          set -euo pipefail
+          xcodegen generate
+
+      - name: Build once for testing
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing             -project IOSNext.xcodeproj             -scheme IOSNext             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0'             | tee xcodebuild-fast.log
+
+      - name: Verify packet tunnel metadata
+        run: |
+          set -euo pipefail
+          appex_info="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Debug-iphonesimulator/IOSNextPacketTunnel.appex/Info.plist' -print -quit)"
+          test -f "$appex_info"
+          test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$appex_info")" = "com.apple.networkextension.packet-tunnel"
+          test -n "$(plutil -extract NSExtension.NSExtensionPrincipalClass raw -o - "$appex_info")"
+
+      - name: Run tests without rebuilding
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building             -project IOSNext.xcodeproj             -scheme IOSNext             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0'             -resultBundlePath FastTestResults.xcresult             | tee -a xcodebuild-fast.log
