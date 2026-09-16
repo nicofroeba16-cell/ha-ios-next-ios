@@ -38,6 +38,13 @@ struct LiveHACardTestModeView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .accessibilityIdentifier("live-ha-card-test-mode")
+        .background {
+            VisualAcceptanceReadyProbe(
+                markerBaseName: "iosnext-live-card-ready-\(page)",
+                accessibilityIdentifier: "visual-ready-live-card-page-\(page)",
+                payload: "page=\(page)"
+            )
+        }
     }
 
     private var header: some View {
