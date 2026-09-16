@@ -98,14 +98,17 @@ final class IOSNextUITests: XCTestCase {
         }
 
         XCTAssertTrue(application.navigationBars["Medien"].waitForExistence(timeout: 3))
-        let nowPlaying = application.buttons["media-player-link-media_player.schlafzimmer"]
-        XCTAssertTrue(nowPlaying.waitForExistence(timeout: 3))
-        XCTAssertTrue(nowPlaying.isHittable)
-        nowPlaying.tap()
 
-        XCTAssertTrue(application.navigationBars["Schlafzimmer"].waitForExistence(timeout: 3))
+        let fireTV = application.buttons["media-player-link-media_player.fire_tv_companion"]
+        XCTAssertTrue(fireTV.waitForExistence(timeout: 3))
+        XCTAssertTrue(fireTV.isHittable)
+        fireTV.tap()
+
+        XCTAssertTrue(application.navigationBars["Fire TV Companion"].waitForExistence(timeout: 3))
         XCTAssertTrue(application.buttons["Pause"].waitForExistence(timeout: 3))
-        attachScreenshot("product-media-detail-interaction", app: application)
+        XCTAssertTrue(application.buttons["10 Sekunden zurück"].waitForExistence(timeout: 3))
+        XCTAssertTrue(application.buttons["10 Sekunden vor"].waitForExistence(timeout: 3))
+        attachScreenshot("product-fire-tv-companion-detail", app: application)
     }
 
     func testChatComposerInteraction() {

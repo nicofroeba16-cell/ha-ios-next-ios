@@ -32,6 +32,20 @@ extension AppModel {
                 ]
             ),
             .init(
+                entityID: "media_player.fire_tv_companion",
+                state: "playing",
+                attributes: [
+                    "friendly_name": .string("Fire TV Companion"),
+                    "media_title": .string("Companion Testfilm"),
+                    "media_content_type": .string("video"),
+                    "volume_level": .number(0.52),
+                    "media_position": .number(42),
+                    "media_duration": .number(1800),
+                    "is_volume_muted": .bool(false),
+                    "skip_interval_seconds": .number(10)
+                ]
+            ),
+            .init(
                 entityID: "climate.schlafzimmer",
                 state: "heat",
                 attributes: [
