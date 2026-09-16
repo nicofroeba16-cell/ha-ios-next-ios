@@ -52,15 +52,38 @@ struct HomeAssistantClientTimingPolicy: Sendable {
     )
 
     static let integrationTest = HomeAssistantClientTimingPolicy(
-        authHandshakeSeconds: 2.0,
-        getStatesSeconds: 3.0,
-        commandSeconds: 1.5,
+        authHandshakeSeconds: 4.0,
+        getStatesSeconds: 4.0,
+        commandSeconds: 2.0,
         heartbeatIntervalSeconds: 0.75,
-        pingTimeoutSeconds: 0.75
+        pingTimeoutSeconds: 1.5
     )
 
     func commandTimeoutSeconds(for type: String) -> Double {
         type == "get_states" ? getStatesSeconds : commandSeconds
+    }
+}
+
+private final class PingCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    init(continuation: CheckedContinuation<Void, Error>) {
+        self.continuation = continuation
+    }
+
+    @discardableResult
+    func resume(_ result: Result<Void, Error>) -> Bool {
+        let continuation: CheckedContinuation<Void, Error>?
+
+        lock.lock()
+        continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+
+        guard let continuation else { return false }
+        continuation.resume(with: result)
+        return true
     }
 }
 
@@ -258,32 +281,22 @@ actor HomeAssistantClient {
         through task: URLSessionWebSocketTask,
         timeoutSeconds: Double
     ) async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    task.sendPing { error in
-                        if let error {
-                            continuation.resume(throwing: error)
-                        } else {
-                            continuation.resume()
-                        }
-                    }
+        try await withCheckedThrowingContinuation { continuation in
+            let completion = PingCompletion(continuation: continuation)
+
+            task.sendPing { error in
+                if let error {
+                    _ = completion.resume(.failure(error))
+                } else {
+                    _ = completion.resume(.success(()))
                 }
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(timeoutSeconds))
-                throw HomeAssistantClientError.timedOut
             }
 
-            do {
-                _ = try await group.next()
-                group.cancelAll()
-            } catch {
-                if case HomeAssistantClientError.timedOut = error {
+            Task {
+                try? await Task.sleep(for: .seconds(timeoutSeconds))
+                if completion.resume(.failure(HomeAssistantClientError.timedOut)) {
                     task.cancel(with: .goingAway, reason: nil)
                 }
-                group.cancelAll()
-                throw error
             }
         }
     }

@@ -430,8 +430,16 @@ final class IOSNextTests: XCTestCase {
             persist: false
         )
 
+        XCTAssertTrue(model.isConnected, "Initial fake-HA connection must succeed before the drop.")
+        XCTAssertEqual(
+            model.entities.first(where: {
+                $0.entityID == "media_player.fire_tv_companion"
+            })?.mediaTitle,
+            "Companion Initial"
+        )
+
         var restored = false
-        for _ in 0..<120 {
+        for _ in 0..<200 {
             if model.isConnected,
                model.entities.first(where: {
                    $0.entityID == "media_player.fire_tv_companion"

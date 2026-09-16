@@ -294,7 +294,9 @@ final class AppModel {
             }
             guard !Task.isCancelled else { return }
             connectionState = .connecting
-            scheduleReconnect()
+            // An established session drop gets one immediate retry. If that
+            // attempt fails, scheduleReconnect() applies exponential backoff.
+            scheduleReconnect(immediate: true)
         }
     }
 
