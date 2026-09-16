@@ -7,7 +7,10 @@ struct AppRootView: View {
 
     var body: some View {
         Group {
-            switch appModel.connectionState {
+            if isLiveCardTestMode {
+                LiveHACardTestModeView()
+            } else {
+                switch appModel.connectionState {
             case .connected:
                 AppShellView(appModel: appModel, chatModel: chatModel)
                     .transition(.opacity)
@@ -21,10 +24,15 @@ struct AppRootView: View {
                     isPresentingStandaloneChat = true
                 }
                     .transition(.opacity)
+                }
             }
         }
         .animation(.smooth(duration: 0.3), value: appModel.isConnected)
-        .task { await appModel.restoreConnection() }
+        .task {
+            if !isLiveCardTestMode {
+                await appModel.restoreConnection()
+            }
+        }
         .sheet(isPresented: Bindable(appModel).isPresentingConnection) {
             ConnectionSetupView(appModel: appModel)
                 .presentationDetents([.medium, .large])
@@ -33,6 +41,10 @@ struct AppRootView: View {
         .fullScreenCover(isPresented: $isPresentingStandaloneChat) {
             StandaloneChatView(chatModel: chatModel)
         }
+    }
+
+    private var isLiveCardTestMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("--live-card-test-mode")
     }
 
     private var reconnectBanner: some View {

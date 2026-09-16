@@ -221,4 +221,32 @@ final class IOSNextTests: XCTestCase {
         """
         XCTAssertThrowsError(try WireGuardConfigurationValidator.validate(duplicatePeer))
     }
+    func testLiveHACardCatalogCoversEveryLiveDashboardType() {
+        XCTAssertEqual(
+            Set(LiveHACardType.allCases.map(\.rawValue)),
+            Set([
+                "sections",
+                "grid",
+                "conditional",
+                "template",
+                "entity",
+                "custom:mushroom-title-card",
+                "custom:mushroom-chips-card",
+                "custom:mushroom-template-card",
+                "custom:navbar-card",
+                "custom:battery-state-card",
+                "custom:ios-light-card",
+                "custom:ios-media-player"
+            ])
+        )
+        XCTAssertEqual(LiveHACardType.allCases.count, 12)
+    }
+
+    func testLiveHACardScreenshotPageArguments() {
+        XCTAssertEqual(LiveHACardTestModeView.page(from: ["app"]), 0)
+        XCTAssertEqual(LiveHACardTestModeView.page(from: ["app", "--live-card-page=1"]), 1)
+        XCTAssertEqual(LiveHACardTestModeView.page(from: ["app", "--live-card-page=2"]), 2)
+        XCTAssertEqual(LiveHACardTestModeView.page(from: ["app", "--live-card-page=99"]), 0)
+    }
+
 }
