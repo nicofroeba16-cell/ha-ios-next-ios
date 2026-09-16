@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 import UIKit
 
@@ -34,10 +35,94 @@ final class IOSNextUITests: XCTestCase {
     }
 
     private func attachScreenshot(_ name: String, app: XCUIApplication) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        var accepted: XCUIScreenshot?
+
+        for attempt in 1...4 {
+            let screenshot = app.screenshot()
+            if isValidVisualScreenshot(screenshot) {
+                accepted = screenshot
+                break
+            }
+
+            if attempt < 4 {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            }
+        }
+
+        guard let screenshot = accepted else {
+            XCTFail("Screenshot remained blank/flat after retries: \(name)")
+            return
+        }
+
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func isValidVisualScreenshot(_ screenshot: XCUIScreenshot) -> Bool {
+        guard let source = UIImage(data: screenshot.pngRepresentation)?.cgImage else {
+            return false
+        }
+
+        let sampleWidth = 80
+        let aspect = Double(source.height) / Double(max(source.width, 1))
+        let sampleHeight = max(80, min(180, Int((Double(sampleWidth) * aspect).rounded())))
+        let bytesPerRow = sampleWidth * 4
+        var pixels = [UInt8](repeating: 0, count: sampleHeight * bytesPerRow)
+
+        guard let context = CGContext(
+            data: &pixels,
+            width: sampleWidth,
+            height: sampleHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return false
+        }
+
+        context.interpolationQuality = .low
+        context.draw(source, in: CGRect(x: 0, y: 0, width: sampleWidth, height: sampleHeight))
+
+        var count = 0
+        var sum = 0.0
+        var sumSquares = 0.0
+        var nearBlack = 0
+        var nearWhite = 0
+        var minLuma = 1.0
+        var maxLuma = 0.0
+
+        for offset in stride(from: 0, to: pixels.count, by: 4) {
+            let r = Double(pixels[offset]) / 255.0
+            let g = Double(pixels[offset + 1]) / 255.0
+            let b = Double(pixels[offset + 2]) / 255.0
+            let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+            count += 1
+            sum += luma
+            sumSquares += luma * luma
+            minLuma = min(minLuma, luma)
+            maxLuma = max(maxLuma, luma)
+            if luma < 0.02 { nearBlack += 1 }
+            if luma > 0.98 { nearWhite += 1 }
+        }
+
+        guard count > 0 else { return false }
+
+        let mean = sum / Double(count)
+        let variance = max(0, sumSquares / Double(count) - mean * mean)
+        let deviation = sqrt(variance)
+        let blackRatio = Double(nearBlack) / Double(count)
+        let whiteRatio = Double(nearWhite) / Double(count)
+        let dynamicRange = maxLuma - minLuma
+
+        let blank = mean < 0.015 || mean > 0.985
+        let flat = deviation < 0.025 || dynamicRange < 0.12
+        let dominated = (blackRatio > 0.985 || whiteRatio > 0.985) && deviation < 0.07
+
+        return !(blank || flat || dominated)
     }
 
     private func switchAcceptanceScreen(
@@ -95,15 +180,28 @@ final class IOSNextUITests: XCTestCase {
         XCUIDevice.shared.orientation = orientation
         let expectsLandscape = orientation == .landscapeLeft || orientation == .landscapeRight
         let deadline = Date().addingTimeInterval(6)
+        var lastFrame = CGRect.zero
+        var stableSamples = 0
 
         while Date() < deadline {
             let frame = application.windows.firstMatch.frame
             if frame.width > 0, frame.height > 0 {
                 let isLandscape = frame.width > frame.height
+                let sameSize = abs(frame.width - lastFrame.width) < 0.5
+                    && abs(frame.height - lastFrame.height) < 0.5
+
                 if isLandscape == expectsLandscape {
-                    return
+                    stableSamples = sameSize ? stableSamples + 1 : 1
+                    if stableSamples >= 4 {
+                        return
+                    }
+                } else {
+                    stableSamples = 0
                 }
+
+                lastFrame = frame
             }
+
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         }
 
