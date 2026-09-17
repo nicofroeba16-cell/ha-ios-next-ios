@@ -23,6 +23,13 @@
     }
   },
   "captured_at": "2026-09-16",
+  "delivery_target": {
+    "device": "iPhone 18 Pro Max",
+    "fallback_allowed": false,
+    "os": "iOS 27.0",
+    "selected_at": "2026-09-17",
+    "visual_alignment_required": true
+  },
   "historical_success_not_canonical": {
     "reason": "predates expanded accessibility/device matrix",
     "run_id": 35094321720,
@@ -63,7 +70,27 @@
     "stale_work_branch": "codex/ci-runtime-optimization",
     "stale_work_head": "39669f27403debd8472955a85d63ec3a60916617"
   },
-  "schema_version": 3,
+  "runner_image_blocker": {
+    "compatible_image_reference": "20260912.0186.1",
+    "exact_head_runs": [
+      {
+        "conclusion": "failure",
+        "head": "cf64da59b698efa3a4e5d9429c677bb9f60af94b",
+        "run_id": 35220768853
+      },
+      {
+        "conclusion": "failure",
+        "head": "b9d4cfd6d2a0280da2f0c6caaf33c3150513fdf6",
+        "run_id": 35220928666
+      }
+    ],
+    "observed_image_version": "20260907.0173.1",
+    "observed_xcode_build": "27A5252f",
+    "portable_validation": "39/39 pass",
+    "reason": "iPhone 18 Pro Max CoreSimulator device type is absent",
+    "status": "blocked"
+  },
+  "schema_version": 4,
   "source_branch": "codex/ios27-owner-control",
   "source_commit": "f977078802b3518256543ccada37e343e66024d0"
 }

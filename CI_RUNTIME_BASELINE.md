@@ -13,6 +13,21 @@ This workstream was revalidated against the current active product base before a
 - Visual/UI single-session changes from the stale optimization line are no longer owned by this workstream and must not be replayed over the current Visual-READY implementation without an explicit integration decision.
 
 
+## iPhone 18 Pro Max delivery target — 2026-09-17
+
+The Native-iOS delivery target is now **iPhone 18 Pro Max / iOS 27.0**.
+
+Current exact-head CI branch: `codex/ci-runtime-fullgate-reconciled`.
+
+- `cf64da59b698efa3a4e5d9429c677bb9f60af94b`: Fast Gate run `35220768853` failed during environment proof on GitHub runner image `20260907.0173.1`.
+- `b9d4cfd6d2a0280da2f0c6caaf33c3150513fdf6`: Fast Gate run `35220928666` reproduced the same external blocker with explicit diagnostics.
+- Portable security/backend validation remained green (`39/39`).
+- The older GitHub `xcode-27-arm64` image `20260907.0173.1` exposes iOS 27.0 and Xcode 27 beta 6, but does **not** contain the `iPhone 18 Pro Max` CoreSimulator device type.
+- The newer runner image `20260912.0186.1` documents `iPhone 18 Pro Max` as an installed simulator.
+- CI must not silently fall back to iPhone 17; an incompatible runner image is treated as an explicit infrastructure blocker.
+- Full Gate remains blocked until a compatible Xcode-27 runner image is assigned and Visual/UI acceptance is aligned to the same device target.
+
+
 This file distinguishes the **current test matrix** from an older successful gate so runtime wins cannot be overstated.
 
 ## Canonical current baseline
