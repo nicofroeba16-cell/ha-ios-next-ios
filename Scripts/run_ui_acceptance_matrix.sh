@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT="IOSNext.xcodeproj"
 SCHEME="IOSNext"
-IPHONE_NAME="iPhone 17 Pro"
+IPHONE_NAME="${IPHONE_NAME:-${DEVICE_NAME:-iPhone 18 Pro Max}}"
 OUT_DIR="UIAcceptance"
 
 : "${DERIVED_DATA_PATH:?DERIVED_DATA_PATH must point to the current isolated DerivedData}"
