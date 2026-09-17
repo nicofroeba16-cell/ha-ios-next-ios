@@ -53,6 +53,21 @@ jobs:
           simulator_sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
           echo "iOS Simulator SDK: $simulator_sdk"
           test "$simulator_sdk" = "27.0"
+
+          if ! xcrun simctl list devices available | grep -F "iPhone 18 Pro Max" >/dev/null; then
+            runtime_id="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[r["identifier"] for r in data["runtimes"] if r.get("isAvailable", True) and r.get("name")=="iOS 27.0"]; print(matches[0] if len(matches)==1 else "")')"
+            device_type_id="$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[d["identifier"] for d in data["devicetypes"] if d.get("name")=="iPhone 18 Pro Max"]; print(matches[0] if len(matches)==1 else "")')"
+            if [ -z "$runtime_id" ] || [ -z "$device_type_id" ]; then
+              echo "Runner image cannot provide iPhone 18 Pro Max / iOS 27.0" >&2
+              echo "ImageVersion=${ImageVersion:-unknown}" >&2
+              xcrun simctl list runtimes >&2 || true
+              xcrun simctl list devicetypes >&2 || true
+              exit 1
+            fi
+            echo "Creating iPhone 18 Pro Max simulator for this job"
+            xcrun simctl create "iPhone 18 Pro Max" "$device_type_id" "$runtime_id"
+          fi
+
           xcrun simctl list devices available | grep -F "iPhone 18 Pro Max"
           go version
 
