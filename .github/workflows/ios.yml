@@ -14,10 +14,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  portable:
+    name: Portable security/backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run portable validation
+        run: bash Scripts/validate_without_macos.sh
+
   xcode-27:
+    name: Xcode 27 full acceptance
+    needs: portable
     runs-on: xcode-27
     timeout-minutes: 75
     env:
+      CI_RUNTIME_SCOPE: full
       DERIVED_DATA_PATH: ${{ github.workspace }}/.ci-derived-data/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -51,8 +63,6 @@ jobs:
           test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
           xcrun simctl list devices available | grep -F "iPhone 17 Pro"
           go version
-      - name: Portable security and backend tests
-        run: bash Scripts/validate_without_macos.sh
       - name: Ensure XcodeGen
         run: |
           set -euo pipefail
@@ -79,6 +89,9 @@ jobs:
           git -C "$checkout" diff --check
       - name: Build for testing on iOS 27
         run: |
+          source Scripts/ci_runtime.sh
+          runtime_count xcodebuild_invocations
+          runtime_start build_for_testing
           set -o pipefail
           xcodebuild build-for-testing \
             -project IOSNext.xcodeproj \
@@ -86,6 +99,7 @@ jobs:
             -derivedDataPath "$DERIVED_DATA_PATH" \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
             | tee xcodebuild.log
+          runtime_end build_for_testing
 
       - name: Verify built packet tunnel metadata
         run: |
@@ -225,6 +239,10 @@ jobs:
 
       - name: Run unit tests on iOS 27
         run: |
+          source Scripts/ci_runtime.sh
+          runtime_count xcodebuild_invocations
+          runtime_count xctestrun_invocations
+          runtime_start unit_tests
           set -o pipefail
           xcodebuild test-without-building \
             -xctestrun "$XCTESTRUN_PATH" \
@@ -232,6 +250,7 @@ jobs:
             -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
             | tee -a xcodebuild.log
+          runtime_end unit_tests
       - name: Show fake Home Assistant log on functional failure
         if: failure()
         run: cat fake-ha.log || true
@@ -377,6 +396,12 @@ jobs:
           test "${{ steps.dark_visual.outcome }}" = "success"
           test "${{ steps.animation_visual.outcome }}" = "success"
 
+      - name: Render runtime telemetry
+        if: always()
+        run: |
+          source Scripts/ci_runtime.sh
+          runtime_render_json ci-runtime-full.json
+
       - name: Collect CI diagnostics
         if: always()
         run: |
@@ -418,6 +443,7 @@ jobs:
             DarkVisualAcceptance
             visual-gate-summary.txt
             CIEvidence
+            ci-runtime-full.json
 
       - name: Cleanup run-local simulator and build state
         if: always()

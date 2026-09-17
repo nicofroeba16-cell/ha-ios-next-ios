@@ -1,0 +1,69 @@
+{
+  "canonical": {
+    "fast_gate": {
+      "build_for_testing_seconds": 63.5,
+      "conclusion": "success",
+      "observed_pre_test_startup_gap_seconds": 152.7,
+      "portable_job_seconds": 5.7,
+      "run_id": 35097789422,
+      "run_number": 16,
+      "unit_execution_seconds": 0.55,
+      "unit_harness_seconds": 181.1,
+      "unit_suite_seconds": 5,
+      "wall_clock_seconds": 260.6
+    },
+    "full_gate": {
+      "cause": "method-level xcodebuild selectors omitted the test-class component; wrong-state accessibility tests and iPad-only test ran in the standard iPhone shard, followed by a 600-second diagnostics timeout",
+      "conclusion": "failure",
+      "failed_step": "Run real product UI acceptance matrix",
+      "run_id": 35097789404,
+      "run_number": 43,
+      "ui_matrix_seconds_to_failure": 1316,
+      "wall_clock_to_failure_seconds": 1678.6
+    }
+  },
+  "captured_at": "2026-09-16",
+  "historical_success_not_canonical": {
+    "reason": "predates expanded accessibility/device matrix",
+    "run_id": 35094321720,
+    "run_number": 40,
+    "steps_seconds": {
+      "animation_acceptance": 68.3,
+      "build_for_testing": 52.4,
+      "evidence_upload": 15,
+      "ha_card_capture": 245.1,
+      "product_ui_acceptance": 310.3,
+      "unit_tests": 167.8
+    },
+    "wall_clock_seconds": 914.2
+  },
+  "internal_metrics": {
+    "status": "instrumentation_added_in_3045976a8085d22a958847b12d5abd7f306761b2"
+  },
+  "reconciliation_checkpoint": {
+    "active_base_branch": "codex/ios27-owner-control",
+    "active_base_commit": "4882a3e7fa639c6ad7c21ab8df4c9ed1ca45efa4",
+    "ahead_by": 14,
+    "behind_by": 12,
+    "captured_at": "2026-09-16",
+    "exact_head_ci": {
+      "fast_gate": {
+        "conclusion": "success",
+        "run_id": 35107207234,
+        "run_number": 23
+      },
+      "mac_gate": {
+        "conclusion": "failure",
+        "failed_step": "Run real product UI acceptance matrix",
+        "run_id": 35107207268,
+        "run_number": 50
+      }
+    },
+    "mergeable": false,
+    "stale_work_branch": "codex/ci-runtime-optimization",
+    "stale_work_head": "39669f27403debd8472955a85d63ec3a60916617"
+  },
+  "schema_version": 3,
+  "source_branch": "codex/ios27-owner-control",
+  "source_commit": "f977078802b3518256543ccada37e343e66024d0"
+}
