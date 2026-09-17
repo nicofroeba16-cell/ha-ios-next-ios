@@ -13,7 +13,7 @@ struct OwnerTicketInboxView: View {
                 )
                 .listRowBackground(Color.clear)
             } else {
-                ForEach(model.supportTickets, id: \.id) { ticket in
+                ForEach(model.supportTickets, id: \SupportTicket.id) { (ticket: SupportTicket) in
                     NavigationLink {
                         OwnerTicketConversationView(model: model, ticketID: ticket.id)
                     } label: {
