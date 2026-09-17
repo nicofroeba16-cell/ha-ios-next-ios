@@ -39,7 +39,7 @@ struct OwnerTicketInboxView: View {
                                         .foregroundStyle(.tertiary)
                                     Text(projectTitle(projectID))
                                         .font(.caption2.weight(.medium))
-                                        .foregroundStyle(ticket.dispatchedProjectID == nil ? .secondary : .green)
+                                        .foregroundStyle(ticket.dispatchedProjectID == nil ? Color.secondary : Color.green)
                                 }
                             }
                         }
