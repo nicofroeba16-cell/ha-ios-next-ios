@@ -30,6 +30,7 @@ jobs:
     timeout-minutes: 75
     env:
       CI_RUNTIME_SCOPE: full
+      DEVICE_NAME: iPhone 18 Pro Max
       DERIVED_DATA_PATH: ${{ github.workspace }}/.ci-derived-data/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -59,9 +60,13 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -version
-          test "$(xcrun --sdk iphoneos --show-sdk-version)" = "27.0"
-          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
-          xcrun simctl list devices available | grep -F "iPhone 17 Pro"
+          device_sdk="$(xcrun --sdk iphoneos --show-sdk-version)"
+          simulator_sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          echo "iOS Device SDK: $device_sdk"
+          echo "iOS Simulator SDK: $simulator_sdk"
+          test "$device_sdk" = "27.0"
+          test "$simulator_sdk" = "27.0"
+          xcrun simctl list devices available | grep -F "iPhone 18 Pro Max"
           go version
       - name: Ensure XcodeGen
         run: |
@@ -97,7 +102,7 @@ jobs:
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
             -derivedDataPath "$DERIVED_DATA_PATH" \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
             | tee xcodebuild.log
           runtime_end build_for_testing
 
@@ -231,7 +236,7 @@ jobs:
         run: |
           set -euo pipefail
           devices_json="$(xcrun simctl list devices available -j)"
-          device_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"]=="iPhone 17 Pro"]; print(devices[0]["udid"])')"
+          device_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"]=="iPhone 18 Pro Max"]; print(devices[0]["udid"])')"
           test -n "$device_id"
           echo "unit_iphone=$device_id" > CIEvidence/unit-simulator.txt
           xcrun simctl shutdown "$device_id" 2>/dev/null || true
@@ -246,7 +251,7 @@ jobs:
           set -o pipefail
           xcodebuild test-without-building \
             -xctestrun "$XCTESTRUN_PATH" \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
             -only-testing:IOSNextTests \
             -resultBundlePath TestResults.xcresult \
             | tee -a xcodebuild.log
@@ -268,7 +273,7 @@ jobs:
         run: |
           set -euo pipefail
           devices_json="$(xcrun simctl list devices available -j)"
-          iphone_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"]=="iPhone 17 Pro"]; print(devices[0]["udid"])')"
+          iphone_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"]=="iPhone 18 Pro Max"]; print(devices[0]["udid"])')"
           ipad_id="$(printf '%s' "$devices_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for runtime,ds in data["devices"].items() if runtime.endswith("iOS-27-0") for d in ds if d.get("isAvailable", True) and d["name"].startswith("iPad")]; print(devices[0]["udid"])')"
           test -n "$iphone_id"
           test -n "$ipad_id"

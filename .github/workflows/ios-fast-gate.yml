@@ -50,8 +50,10 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -version
-          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
-          xcrun simctl list devices available | grep -F "iPhone 17 Pro"
+          simulator_sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          echo "iOS Simulator SDK: $simulator_sdk"
+          test "$simulator_sdk" = "27.0"
+          xcrun simctl list devices available | grep -F "iPhone 18 Pro Max"
           go version
 
       - name: Start iPhone simulator early
@@ -59,7 +61,7 @@ jobs:
           set -euo pipefail
           source Scripts/ci_runtime.sh
           read -r IOSNEXT_IPHONE_UDID IOSNEXT_IPHONE_STATE < <(
-            xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[d for runtime,devices in data["devices"].items() if runtime.endswith("iOS-27-0") for d in devices if d.get("isAvailable", True) and d["name"]=="iPhone 17 Pro"]; assert len(matches)==1, f"expected exactly one iPhone 17 Pro on iOS 27.0, got {len(matches)}"; d=matches[0]; print(d["udid"], d["state"])'
+            xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[d for runtime,devices in data["devices"].items() if runtime.endswith("iOS-27-0") for d in devices if d.get("isAvailable", True) and d["name"]=="iPhone 18 Pro Max"]; assert len(matches)==1, f"expected exactly one iPhone 18 Pro Max on iOS 27.0, got {len(matches)}"; d=matches[0]; print(d["udid"], d["state"])'
           )
           test -n "$IOSNEXT_IPHONE_UDID"
           echo "IOSNEXT_IPHONE_UDID=$IOSNEXT_IPHONE_UDID" >> "$GITHUB_ENV"
@@ -100,7 +102,7 @@ jobs:
           xcodebuild build-for-testing \
             -project IOSNext.xcodeproj \
             -scheme IOSNext \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
             | tee xcodebuild-fast.log
 
       - name: Verify packet tunnel metadata
@@ -200,7 +202,7 @@ jobs:
           set -o pipefail
           xcodebuild test-without-building \
             -xctestrun "$XCTESTRUN_PATH" \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=27.0' \
+            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
             -only-testing:IOSNextTests \
             -resultBundlePath FastTestResults.xcresult \
             | tee -a xcodebuild-fast.log
