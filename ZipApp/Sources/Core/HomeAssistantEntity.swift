@@ -13,7 +13,24 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
     var id: String { entityID }
 
     var displayName: String {
-        attributes["friendly_name"]?.stringValue ?? entityID
+        if let friendly = attributes["friendly_name"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !friendly.isEmpty {
+            return friendly
+        }
+        return presentationFallbackName
+    }
+
+    private var presentationFallbackName: String {
+        let objectID = entityID.split(separator: ".", maxSplits: 1).dropFirst().first.map(String.init) ?? entityID
+        let words = objectID
+            .replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ")
+            .map { token in
+                let text = String(token)
+                if text.allSatisfy({ $0.isNumber }) { return text }
+                return text.prefix(1).uppercased() + text.dropFirst()
+            }
+        let candidate = words.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return candidate.isEmpty ? domain.localizedCapitalized : candidate
     }
 
     var isOn: Bool {
