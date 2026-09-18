@@ -13,7 +13,9 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
     var id: String { entityID }
 
     var displayName: String {
-        if let friendly = attributes["friendly_name"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !friendly.isEmpty {
+        if let friendly = attributes["friendly_name"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !friendly.isEmpty,
+           friendly.localizedCaseInsensitiveCompare(entityID) != .orderedSame {
             return friendly
         }
         return presentationFallbackName
