@@ -16,8 +16,8 @@ targets:
     sources:
       - Sources
       - Assets.xcassets
-    resources:
-      - Resources
+      - path: Resources/live_ha_fixture.json
+        buildPhase: resources
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

@@ -14,7 +14,7 @@ final class VideoTourUITests: XCTestCase {
 
         // Räume: use a real area from the live registry, no demo entity names.
         tapTab("Räume"); linger(2.0)
-        openAndBack("Timo Zimmer", linger: 3.0)
+        tapEnsuringVisible("Timo Zimmer", maxSwipes: 16); linger(3.0); tapBack(); linger(1.0)
 
         // Media/scenes overview from the complete fixture.
         tapTab("Medien"); linger(3.0)
@@ -46,8 +46,8 @@ final class VideoTourUITests: XCTestCase {
         text.tap()
     }
 
-    private func tapEnsuringVisible(_ label: String) {
-        for _ in 0..<6 {
+    private func tapEnsuringVisible(_ label: String, maxSwipes: Int = 10) {
+        for _ in 0..<maxSwipes {
             let button = app.buttons[label]
             if button.exists && button.isHittable { button.tap(); return }
             let text = app.staticTexts[label]
