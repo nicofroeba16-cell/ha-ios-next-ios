@@ -32,6 +32,9 @@ struct HomeView: View {
                                 roomCard(area: area, title: item.1, icon: item.2, tint: item.3)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(item.1)
+                            .accessibilityAddTraits(.isButton)
                         }
                     }
                 }
@@ -132,7 +135,6 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.white.opacity(0.08)))
-        .accessibilityLabel(title)
     }
 
     private func metricCard(title: String, value: String, icon: String) -> some View {
