@@ -7,7 +7,7 @@ struct RoomsView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
                 HStack(spacing: 10) {
-                    HomeMetricTile(title: "Räume", value: "\(appModel.areas.count)", icon: "square.grid.2x2.fill", tint: .blue)
+                    HomeMetricTile(title: "Räume", value: "\(appModel.areas.filter(\.isAppRoom).count)", icon: "square.grid.2x2.fill", tint: .blue)
                     HomeMetricTile(title: "Geräte", value: "\(appModel.devices.count)", icon: "cpu.fill", tint: .indigo)
                 }
                 .padding(.horizontal, 6)
@@ -23,12 +23,12 @@ struct RoomsView: View {
                     )
                 } else {
                     LazyVStack(spacing: 10) {
-                        ForEach(appModel.areas.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { area in
+                        ForEach(appModel.areas.filter(\.isAppRoom).sorted { $0.appDisplayName.localizedStandardCompare($1.appDisplayName) == .orderedAscending }) { area in
                             NavigationLink {
                                 RoomDetailView(area: area, appModel: appModel)
                             } label: {
                                 IOS27StatusCard(
-                                    title: area.name,
+                                    title: area.appDisplayName,
                                     value: "\(appModel.devices(inArea: area.id).count) Geräte",
                                     symbol: "door.left.hand.open",
                                     tint: .blue,
@@ -87,7 +87,7 @@ struct RoomDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 IOS27StatusCard(
-                    title: area.name,
+                    title: area.appDisplayName,
                     value: "\(appModel.devices(inArea: area.id).count) Geräte",
                     symbol: "door.left.hand.open",
                     tint: .blue,
@@ -156,7 +156,7 @@ struct RoomDetailView: View {
             .padding(.bottom, 96)
         }
         .background(IOS27HomeBackground())
-        .navigationTitle(area.name)
+        .navigationTitle(area.appDisplayName)
         .navigationBarTitleDisplayMode(.inline)
     }
 

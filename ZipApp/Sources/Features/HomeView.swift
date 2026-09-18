@@ -174,7 +174,7 @@ struct HomeView: View {
 
     private var systemStrip: some View {
         HStack(spacing: 0) {
-            HomeMetricTile(title: "Räume", value: "\(appModel.areas.count)", icon: "square.grid.2x2.fill", tint: .blue)
+            HomeMetricTile(title: "Räume", value: "\(appModel.areas.filter(\.isAppRoom).count)", icon: "square.grid.2x2.fill", tint: .blue)
             divider
             HomeMetricTile(title: "Geräte", value: "\(appModel.devices.count)", icon: "cpu.fill", tint: .indigo)
             divider

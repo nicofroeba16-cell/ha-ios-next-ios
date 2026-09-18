@@ -26,6 +26,14 @@ struct HomeAssistantSnapshot: Sendable {
     let entityRegistry: [HomeAssistantRegistryEntity]
 }
 extension HomeAssistantArea {
+    var isAppRoom: Bool {
+        !["Tisch", "Ambiente"].contains { name.localizedCaseInsensitiveCompare($0) == .orderedSame }
+    }
+
+    var appDisplayName: String {
+        name.localizedCaseInsensitiveCompare("Hütte Master") == .orderedSame ? "Hütte" : name
+    }
+
     init?(dictionary: [String: Any]) {
         guard let id = dictionary["area_id"] as? String,
               let name = dictionary["name"] as? String else { return nil }

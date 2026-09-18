@@ -106,7 +106,7 @@ struct SystemView: View {
         HStack(spacing: 0) {
             HomeMetricTile(title: "Entitäten", value: "\(appModel.entities.count)", icon: "circle.grid.3x3.fill", tint: .blue)
             Divider().frame(height: 54)
-            HomeMetricTile(title: "Räume", value: "\(appModel.areas.count)", icon: "square.grid.2x2.fill", tint: .indigo)
+            HomeMetricTile(title: "Räume", value: "\(appModel.areas.filter(\.isAppRoom).count)", icon: "square.grid.2x2.fill", tint: .indigo)
             Divider().frame(height: 54)
             HomeMetricTile(title: "Geräte", value: "\(appModel.devices.count)", icon: "cpu.fill", tint: .purple)
         }
