@@ -1,0 +1,225 @@
+name: iOS SideStore Free IPA Candidate
+
+on:
+  push:
+    branches:
+      - test/sidestore-free-ipa-20260918-22b3253
+
+permissions:
+  contents: read
+
+jobs:
+  sidestore-free-ipa:
+    name: Build device IPA without packet tunnel
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact test source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Prove macOS and device SDK
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          echo "iphoneos SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
+          test -n "$(xcrun --sdk iphoneos --show-sdk-path)"
+
+      - name: Activate pinned Go toolchain
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: 1.25.14
+          cache: false
+
+      - name: Ensure XcodeGen
+        run: |
+          set -euo pipefail
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+          else
+            brew install xcodegen
+          fi
+
+      - name: Prepare pinned WireGuard source
+        run: bash Scripts/prepare_wireguard_dependency.sh
+
+      - name: Create ephemeral Free test XcodeGen spec
+        run: |
+          set -euo pipefail
+          cp project.yml project.sidestore-free.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('project.sidestore-free.yml')
+          text = p.read_text()
+          entitlement = '        CODE_SIGN_ENTITLEMENTS: Sources/Resources/IOSNext.entitlements\n'
+          dependency = '''    dependencies:\n      - target: IOSNextPacketTunnel\n        embed: true\n        link: false\n'''
+          if entitlement not in text:
+              raise SystemExit('main app entitlement setting not found')
+          if dependency not in text:
+              raise SystemExit('packet tunnel embed dependency not found')
+          text = text.replace(entitlement, '        CODE_SIGN_ENTITLEMENTS: ""\n', 1)
+          text = text.replace(dependency, '', 1)
+          p.write_text(text)
+          PY
+          echo '--- Free test diff (runtime only; not committed) ---'
+          diff -u project.yml project.sidestore-free.yml || true
+          grep -n -A6 -B6 'IOSNextPacketTunnel' project.sidestore-free.yml || true
+
+      - name: Generate isolated Free test project
+        run: xcodegen generate --spec project.sidestore-free.yml
+
+      - name: Verify main app has no entitlement file and no embed dependency
+        run: |
+          set -euo pipefail
+          xcodebuild -project IOSNext.xcodeproj -target IOSNext -configuration Release -sdk iphoneos -showBuildSettings > free-build-settings.txt
+          ENT_LINE="$(grep -E '^[[:space:]]*CODE_SIGN_ENTITLEMENTS[[:space:]]*=' free-build-settings.txt | tail -1 || true)"
+          echo "${ENT_LINE:-CODE_SIGN_ENTITLEMENTS=<not set>}"
+          if [ -n "$ENT_LINE" ]; then
+            VALUE="${ENT_LINE#*=}"
+            VALUE="$(echo "$VALUE" | xargs)"
+            test -z "$VALUE"
+          fi
+          if grep -n 'IOSNextPacketTunnel.appex.*Embed App Extensions\|Embed App Extensions.*IOSNextPacketTunnel.appex' IOSNext.xcodeproj/project.pbxproj; then
+            echo 'Packet tunnel still appears in an Embed App Extensions build file' >&2
+            exit 1
+          fi
+
+      - name: Build Release device app without signing
+        run: |
+          set -euo pipefail
+          rm -rf build
+          xcodebuild build \
+            -project IOSNext.xcodeproj \
+            -scheme IOSNext \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Validate Free device app bundle and entitlements
+        run: |
+          set -euo pipefail
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/IOSNext.app"
+          test -d "$APP"
+          test -f "$APP/Info.plist"
+          EXEC_NAME="$(plutil -extract CFBundleExecutable raw -o - "$APP/Info.plist")"
+          EXEC="$APP/$EXEC_NAME"
+          test -x "$EXEC"
+          BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP/Info.plist")"
+          test "$BUNDLE_ID" = "de.nicofroeba16.iosnext"
+          ARCHS="$(lipo -archs "$EXEC")"
+          echo "App: $APP"
+          echo "Executable: $EXEC_NAME"
+          echo "Bundle ID: $BUNDLE_ID"
+          echo "Architectures: $ARCHS"
+          file "$EXEC"
+          case " $ARCHS " in *" x86_64 "*) echo "Simulator architecture detected" >&2; exit 1;; esac
+          xcrun vtool -show-build "$EXEC" | tee device-build-metadata.txt
+          grep -Eq 'platform +IOS($| )' device-build-metadata.txt
+          if [ -e "$APP/PlugIns/IOSNextPacketTunnel.appex" ]; then
+            echo 'packet_tunnel_extension=present' >&2
+            exit 1
+          fi
+          echo 'packet_tunnel_extension=absent'
+          if [ -d "$APP/PlugIns" ]; then
+            echo 'PlugIns directory contents:'
+            find "$APP/PlugIns" -maxdepth 2 -print
+          else
+            echo 'plugins_directory=absent'
+          fi
+          if [ -f "$APP/embedded.mobileprovision" ]; then
+            echo 'embedded.mobileprovision=present'
+          else
+            echo 'embedded.mobileprovision=absent'
+          fi
+          set +e
+          codesign -d --entitlements :- "$APP" > app-entitlements.plist 2>codesign-entitlements-stderr.txt
+          ENT_RC=$?
+          codesign -dv --verbose=4 "$APP" >codesign-metadata.txt 2>&1
+          SIGN_RC=$?
+          set -e
+          echo "codesign_entitlements_exit=$ENT_RC"
+          cat codesign-entitlements-stderr.txt
+          echo "codesign_metadata_exit=$SIGN_RC"
+          cat codesign-metadata.txt
+          if grep -q 'com.apple.developer.networking.networkextension' app-entitlements.plist 2>/dev/null; then
+            echo 'network_extension_entitlement=present' >&2
+            cat app-entitlements.plist
+            exit 1
+          fi
+          echo 'network_extension_entitlement=absent'
+          echo '--- runtime Free spec main-app entitlement check ---'
+          awk '/^  IOSNext:/{inapp=1} /^  [A-Za-z0-9].*:/{if ($0 !~ /^  IOSNext:/ && inapp) exit} inapp{print}' project.sidestore-free.yml | tee free-main-target-spec.txt
+          if grep -q 'com.apple.developer.networking.networkextension' free-main-target-spec.txt; then
+            echo 'network extension entitlement leaked into Free main target spec' >&2
+            exit 1
+          fi
+
+      - name: Package standard unsigned Free IPA
+        run: |
+          set -euo pipefail
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/IOSNext.app"
+          rm -rf ipa-root IOSNext-Free-unsigned.ipa
+          mkdir -p ipa-root/Payload
+          ditto "$APP" ipa-root/Payload/IOSNext.app
+          test ! -e ipa-root/Payload/IOSNext.app/PlugIns/IOSNextPacketTunnel.appex
+          (cd ipa-root && zip -qry "$GITHUB_WORKSPACE/IOSNext-Free-unsigned.ipa" Payload)
+          test -s IOSNext-Free-unsigned.ipa
+
+      - name: Validate IPA archive and record digest
+        run: |
+          set -euo pipefail
+          unzip -t IOSNext-Free-unsigned.ipa
+          unzip -l IOSNext-Free-unsigned.ipa | tee ipa-contents.txt
+          unzip -Z1 IOSNext-Free-unsigned.ipa | grep -Fx 'Payload/IOSNext.app/Info.plist'
+          if unzip -Z1 IOSNext-Free-unsigned.ipa | grep -F 'Payload/IOSNext.app/PlugIns/IOSNextPacketTunnel.appex'; then
+            echo 'Packet tunnel extension unexpectedly present in IPA' >&2
+            exit 1
+          fi
+          rm -rf ipa-check
+          mkdir ipa-check
+          unzip -q IOSNext-Free-unsigned.ipa -d ipa-check
+          APP='ipa-check/Payload/IOSNext.app'
+          test -d "$APP"
+          test -f "$APP/Info.plist"
+          EXEC_NAME="$(plutil -extract CFBundleExecutable raw -o - "$APP/Info.plist")"
+          test -x "$APP/$EXEC_NAME"
+          test ! -e "$APP/PlugIns/IOSNextPacketTunnel.appex"
+          ARCHS="$(lipo -archs "$APP/$EXEC_NAME")"
+          case " $ARCHS " in *" x86_64 "*) echo 'Simulator architecture detected in packaged IPA' >&2; exit 1;; esac
+          xcrun vtool -show-build "$APP/$EXEC_NAME" | grep -Eq 'platform +IOS($| )'
+          IPA_SIZE="$(stat -f%z IOSNext-Free-unsigned.ipa)"
+          IPA_SHA256="$(shasum -a 256 IOSNext-Free-unsigned.ipa | awk '{print $1}')"
+          echo "IPA_FILE=IOSNext-Free-unsigned.ipa"
+          echo "IPA_SIZE_BYTES=$IPA_SIZE"
+          echo "IPA_SHA256=$IPA_SHA256"
+          {
+            echo "source_sha=$GITHUB_SHA"
+            echo "source_parent_sha=$(git rev-parse HEAD^)"
+            echo 'ipa_file=IOSNext-Free-unsigned.ipa'
+            echo 'artifact_name=iosnext-free-unsigned-ipa'
+            echo "size_bytes=$IPA_SIZE"
+            echo "sha256=$IPA_SHA256"
+            echo 'packet_tunnel_extension=absent'
+            echo 'network_extension_entitlement=absent'
+          } | tee sidestore-free-ipa-metadata.txt
+
+      - name: Upload SideStore Free IPA candidate artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: iosnext-free-unsigned-ipa
+          path: |
+            IOSNext-Free-unsigned.ipa
+            sidestore-free-ipa-metadata.txt
+            ipa-contents.txt
+            device-build-metadata.txt
+            codesign-metadata.txt
+            codesign-entitlements-stderr.txt
+            app-entitlements.plist
+            free-build-settings.txt
+            free-main-target-spec.txt
+          if-no-files-found: error
+          retention-days: 7
