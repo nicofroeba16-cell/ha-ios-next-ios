@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct EntityControlView: View {
     let entityID: String
@@ -42,8 +43,8 @@ struct EntityControlView: View {
                     Task { await appModel.toggle(entity) }
                 }
                 if let brightness = entity.brightness {
-                    BrightnessControl(value: brightness / 255) {
-                        Task { await appModel.setBrightness($0, for: entity) }
+                    BrightnessControl(value: brightness / 255) { newValue in
+                        Task { await appModel.setBrightness(newValue, for: entity) }
                     }
                 }
             }

@@ -45,7 +45,7 @@ struct EntityRow: View {
                     .font(.body.weight(.medium))
                 Text(entity.secondaryStateText)
                     .font(.footnote)
-                    .foregroundStyle(entity.isAvailable ? .secondary : .red)
+                    .foregroundStyle(entity.isAvailable ? Color.secondary : Color.red)
             }
             Spacer()
             if let action {
