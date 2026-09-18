@@ -1,14 +1,14 @@
-name: iOS ZIP Video Capture
+name: iOS Screenshot Capture
 on:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: ios-zip-video-${{ github.ref }}
+  group: ios-screenshot-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   capture:
-    name: Isolated iPhone video capture
+    name: Isolated iPhone screenshot capture
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
@@ -34,59 +34,43 @@ jobs:
         working-directory: ZipApp
         run: |
           set -euo pipefail
-          DERIVED="$RUNNER_TEMP/iosnext-video-derived"
+          DERIVED="$RUNNER_TEMP/iosnext-screenshot-derived"
           rm -rf "$DERIVED"
           xcodebuild build-for-testing -project IOSNext.xcodeproj -scheme IOSNext \
             -derivedDataPath "$DERIVED" \
             -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
             CODE_SIGNING_ALLOWED=NO
-      - name: Package simulator app
-        run: |
-          set -euo pipefail
-          APP="$RUNNER_TEMP/iosnext-video-derived/Build/Products/Debug-iphonesimulator/IOSNext.app"
-          test -d "$APP"
-          ditto -c -k --sequesterRsrc --keepParent "$APP" "$GITHUB_WORKSPACE/IOSNext-Simulator-App.zip"
-          ls -lh "$GITHUB_WORKSPACE/IOSNext-Simulator-App.zip"
-      - name: Upload simulator app
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: IOSNext-Simulator-App
-          path: IOSNext-Simulator-App.zip
-          if-no-files-found: error
-          retention-days: 1
-      - name: Record visible app tour
+      - name: Capture all view screenshots
         working-directory: ZipApp
         run: |
           set -euo pipefail
-          DERIVED="$RUNNER_TEMP/iosnext-video-derived"
+          DERIVED="$RUNNER_TEMP/iosnext-screenshot-derived"
+          RESULT="$RUNNER_TEMP/IOSNext-Screenshots.xcresult"
+          OUT="$GITHUB_WORKSPACE/IOSNext-All-View-Screenshots"
           udid="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[x for k,v in d["devices"].items() if k.endswith("iOS-27-0") for x in v if x.get("isAvailable",True) and x["name"]=="iPhone 18 Pro Max"]; assert m; print(m[0]["udid"])')"
           xcrun simctl shutdown "$udid" 2>/dev/null || true
           xcrun simctl erase "$udid"
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid" -b
           app_path="$DERIVED/Build/Products/Debug-iphonesimulator/IOSNext.app"
-          test -d "$app_path"
           xcrun simctl install "$udid" "$app_path"
           xcrun simctl launch "$udid" de.nicofroeba16.iosnext --video-demo
-          sleep 3
-          raw="$GITHUB_WORKSPACE/IOSNext-Xcode-Test-All-Pages.mp4"
-          xcrun simctl io "$udid" recordVideo --codec=h264 "$raw" >"$RUNNER_TEMP/record-video.log" 2>&1 &
-          recorder=$!
-          finish() { kill -INT "$recorder" 2>/dev/null || true; wait "$recorder" 2>/dev/null || true; }
-          trap finish EXIT
+          sleep 2
+          rm -rf "$RESULT" "$OUT"
           xcodebuild test-without-building -project IOSNext.xcodeproj -scheme IOSNext \
             -derivedDataPath "$DERIVED" \
             -destination "platform=iOS Simulator,id=$udid" \
-            -only-testing:IOSNextUITests/VideoTourUITests/testRecordAllViews \
+            -resultBundlePath "$RESULT" \
+            -only-testing:IOSNextUITests/ScreenshotUITests/testCaptureAllViews \
             CODE_SIGNING_ALLOWED=NO
-          finish
-          trap - EXIT
-          test -s "$raw"
-          ls -lh "$raw"
-      - name: Upload video only
+          mkdir -p "$OUT"
+          xcrun xcresulttool export attachments --path "$RESULT" --output-path "$OUT"
+          find "$OUT" -type f -maxdepth 2 -print
+          test "$(find "$OUT" -type f | wc -l | tr -d ' ')" -ge 20
+      - name: Upload screenshots
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: IOSNext-Xcode-Test-All-Pages
-          path: IOSNext-Xcode-Test-All-Pages.mp4
+          name: IOSNext-All-View-Screenshots
+          path: IOSNext-All-View-Screenshots
           if-no-files-found: error
           retention-days: 1
