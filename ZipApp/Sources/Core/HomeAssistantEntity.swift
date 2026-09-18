@@ -126,7 +126,7 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
     }
 
     var isPrimaryRoomControl: Bool {
-        guard [.toggle, .fan, .cover, .climate, .lock].contains(controlKind) else { return false }
+        guard [EntityControlKind.toggle, .cover, .climate, .lock].contains(controlKind) else { return false }
         let searchable = "\(entityID) \(displayName)".lowercased()
         let technicalTerms = [
             "wi-fi", "wifi", "wlan", "pre-release", "pre_release", "kindersicherung",
