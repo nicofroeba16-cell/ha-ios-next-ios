@@ -15,6 +15,7 @@ struct IOS27SectionHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -30,6 +31,7 @@ struct IOS27LightCard: View {
                     .foregroundStyle(entity.isOn ? .yellow : .secondary)
                     .frame(width: 42, height: 42)
                     .background((entity.isOn ? Color.yellow : Color.secondary).opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(entity.displayName).font(.headline)
                     Text(entity.isOn ? "Eingeschaltet" : "Ausgeschaltet")
@@ -47,16 +49,19 @@ struct IOS27LightCard: View {
                 .ios27GlassButton()
                 .tint(entity.isOn ? .yellow : .secondary)
                 .accessibilityLabel(entity.isOn ? "Ausschalten" : "Einschalten")
+                .accessibilityHint("Schaltet \(entity.displayName) um")
             }
 
             if let brightness = entity.brightness {
                 HStack(spacing: 10) {
-                    Image(systemName: "sun.min.fill").foregroundStyle(.secondary)
+                    Image(systemName: "sun.min.fill").foregroundStyle(.secondary).accessibilityHidden(true)
                     Slider(value: Binding(
                         get: { min(max(brightness / 255, 0), 1) },
                         set: { value in Task { await appModel.setBrightness(value, for: entity) } }
                     ))
-                    Image(systemName: "sun.max.fill").foregroundStyle(entity.isOn ? .yellow : .secondary)
+                    .accessibilityLabel("Helligkeit")
+                    .accessibilityValue("\(Int((brightness / 255) * 100)) Prozent")
+                    Image(systemName: "sun.max.fill").foregroundStyle(entity.isOn ? .yellow : .secondary).accessibilityHidden(true)
                 }
             }
         }
@@ -81,6 +86,7 @@ struct IOS27MediaCard: View {
                     .foregroundStyle(.blue)
                     .frame(width: 44, height: 44)
                     .background(Color.blue.opacity(0.13), in: Circle())
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.displayName).font(.headline)
                     Text(player.mediaTitle ?? player.state.localizedCapitalized)
@@ -105,11 +111,13 @@ struct IOS27MediaCard: View {
 
             if let volume = effectiveVolumePlayer.volumeLevel {
                 HStack(spacing: 10) {
-                    Image(systemName: "speaker.fill").foregroundStyle(.secondary)
+                    Image(systemName: "speaker.fill").foregroundStyle(.secondary).accessibilityHidden(true)
                     Slider(value: Binding(
                         get: { volume },
                         set: { value in Task { await appModel.setVolume(value, for: effectiveVolumePlayer) } }
                     ))
+                    .accessibilityLabel("Lautstärke")
+                    .accessibilityValue("\(Int(volume * 100)) Prozent")
                     Button {
                         Task {
                             await appModel.callService(
@@ -122,6 +130,7 @@ struct IOS27MediaCard: View {
                         Image(systemName: effectiveVolumePlayer.isMuted == true ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     }
                     .ios27GlassButton()
+                    .accessibilityLabel(effectiveVolumePlayer.isMuted == true ? "Ton einschalten" : "Stummschalten")
                 }
             }
         }
@@ -170,6 +179,9 @@ struct IOS27StatusCard: View {
         }
         .padding(14)
         .ios27ContentSurface(radius: 20)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityValue([value, detail].compactMap { $0 }.joined(separator: ", "))
     }
 }
 
@@ -207,6 +219,7 @@ struct IOS27MediaZoneCard: View {
                         .foregroundStyle(player.state == "playing" ? .blue : .secondary)
                         .frame(width: 34, height: 34)
                         .background(Color.blue.opacity(player.state == "playing" ? 0.14 : 0.06), in: Circle())
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(player.displayName).font(.subheadline.weight(.semibold))
                         Text(player.mediaTitle ?? player.state.localizedCapitalized)
@@ -239,6 +252,7 @@ struct IOS27MediaZoneCard: View {
 
 struct IOS27FireTVCompanionCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     let player: HomeAssistantEntity
     let appModel: AppModel
 
@@ -251,15 +265,23 @@ struct IOS27FireTVCompanionCard: View {
                     .foregroundStyle(.orange)
                     .frame(width: 48, height: 48)
                     .background(Color.orange.opacity(0.14), in: Circle())
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.displayName).font(.title3.weight(.bold))
                     Text(player.mediaTitle ?? player.state.localizedCapitalized)
                         .font(.caption).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 }
                 if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                Circle()
-                    .fill(player.isAvailable ? (player.isOn ? Color.green : Color.secondary) : Color.red)
-                    .frame(width: 8, height: 8)
+                if differentiateWithoutColor {
+                    Image(systemName: player.isAvailable ? (player.isOn ? "checkmark.circle.fill" : "minus.circle.fill") : "exclamationmark.triangle.fill")
+                        .foregroundStyle(player.isAvailable ? (player.isOn ? .green : .secondary) : .red)
+                        .accessibilityLabel(player.isAvailable ? (player.isOn ? "Aktiv" : "Inaktiv") : "Nicht verfügbar")
+                } else {
+                    Circle()
+                        .fill(player.isAvailable ? (player.isOn ? Color.green : Color.secondary) : Color.red)
+                        .frame(width: 8, height: 8)
+                        .accessibilityLabel(player.isAvailable ? (player.isOn ? "Aktiv" : "Inaktiv") : "Nicht verfügbar")
+                }
             }
 
             IOS27GlassControlGroup(spacing: 12) {
@@ -291,17 +313,20 @@ struct IOS27FireTVCompanionCard: View {
 
             if let volume = player.volumeLevel {
                 HStack(spacing: 10) {
-                    Image(systemName: "speaker.fill").foregroundStyle(.secondary)
+                    Image(systemName: "speaker.fill").foregroundStyle(.secondary).accessibilityHidden(true)
                     Slider(value: Binding(
                         get: { volume },
                         set: { value in Task { await appModel.setVolume(value, for: player) } }
                     ))
+                    .accessibilityLabel("Lautstärke")
+                    .accessibilityValue("\(Int(volume * 100)) Prozent")
                     Button {
                         Task { await appModel.callService(for: player, service: "volume_mute", data: ["is_volume_muted": player.isMuted != true]) }
                     } label: {
                         Image(systemName: player.isMuted == true ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     }
                     .ios27GlassButton()
+                    .accessibilityLabel(player.isMuted == true ? "Ton einschalten" : "Stummschalten")
                 }
             }
         }

@@ -125,6 +125,7 @@ private struct BrightnessControl: View {
             Image(systemName: "sun.max.fill")
         }
         .accessibilityLabel("Helligkeit")
+        .accessibilityValue("\(Int(value * 100)) Prozent")
     }
 }
 
@@ -144,5 +145,6 @@ private struct TemperatureControl: View {
             }
         }
         .accessibilityLabel("Solltemperatur")
+        .accessibilityValue(String(format: "%.1f Grad Celsius", value))
     }
 }

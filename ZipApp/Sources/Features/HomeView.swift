@@ -42,6 +42,8 @@ struct HomeView: View {
                                 .buttonStyle(IOS27PressStyle())
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(item.title)
+                                .accessibilityValue("\(appModel.devices(inArea: area.id).count) Geräte, \(activeCount(in: area)) aktiv")
+                                .accessibilityHint("Öffnet den Raum")
                                 .accessibilityAddTraits(.isButton)
                             }
                         }
@@ -124,6 +126,8 @@ struct HomeView: View {
         .buttonStyle(IOS27PressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Nico-Zimmer")
+        .accessibilityValue("\(appModel.devices(inArea: area.id).count) Geräte, \(activeCount(in: area)) aktiv")
+        .accessibilityHint("Öffnet den Raum")
         .accessibilityAddTraits(.isButton)
     }
 
