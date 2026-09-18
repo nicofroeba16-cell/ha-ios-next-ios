@@ -275,6 +275,34 @@ final class AppModel {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    var unassignedEntities: [HomeAssistantEntity] {
+        let devicesByID = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
+        let registryByID = Dictionary(uniqueKeysWithValues: entityRegistry.map { ($0.entityID, $0) })
+        return entities.filter { entity in
+            guard let registry = registryByID[entity.entityID] else { return true }
+            if registry.areaID != nil { return false }
+            if let deviceID = registry.deviceID,
+               devicesByID[deviceID]?.areaID != nil { return false }
+            return true
+        }
+        .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    var serviceLikeEntities: [HomeAssistantEntity] {
+        let domains: Set<String> = [
+            "automation", "button", "input_boolean", "light", "lock", "media_player",
+            "notify", "number", "remote", "scene", "script", "select", "switch", "tts"
+        ]
+        return entities
+            .filter { domains.contains($0.domain) }
+            .sorted { lhs, rhs in
+                if lhs.domain == rhs.domain {
+                    return lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+                }
+                return lhs.domain < rhs.domain
+            }
+    }
+
     func entities(forDevice deviceID: String) -> [HomeAssistantEntity] {
         let entityIDs = Set(entityRegistry.filter { $0.deviceID == deviceID }.map(\.entityID))
         return entities

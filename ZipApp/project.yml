@@ -16,6 +16,8 @@ targets:
     sources:
       - Sources
       - Assets.xcassets
+    resources:
+      - Resources
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -35,6 +37,7 @@ targets:
       - Tests
     dependencies:
       - target: IOSNext
+
   IOSNextUITests:
     type: bundle.ui-testing
     platform: iOS

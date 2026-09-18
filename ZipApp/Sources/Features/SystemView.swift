@@ -11,27 +11,27 @@ struct SystemView: View {
                     Spacer()
                     ConnectionStatusLabel(state: appModel.connectionState)
                 }
-                Button("Verbindung verwalten") {
-                    appModel.isPresentingConnection = true
-                }
-                Button("Daten aktualisieren") {
-                    Task { await appModel.refresh() }
-                }
-                .disabled(isBusy)
-                Button("Verbindung entfernen", role: .destructive) {
-                    appModel.forgetConnection()
-                }
+                Button("Verbindung verwalten") { appModel.isPresentingConnection = true }
+                Button("Daten aktualisieren") { Task { await appModel.refresh() } }
+                    .disabled(isBusy)
+                Button("Verbindung entfernen", role: .destructive) { appModel.forgetConnection() }
             }
             if let error = appModel.lastActionError {
-                Section("Letzter Aktionsfehler") {
-                    Text(error).foregroundStyle(.red)
-                }
+                Section("Letzter Aktionsfehler") { Text(error).foregroundStyle(.red) }
             }
-            Section("Home Assistant") {
+            Section("Live-HA-Inventar") {
                 LabeledContent("Entitäten", value: "\(appModel.entities.count)")
-                LabeledContent("Areas", value: "\(appModel.areas.count)")
+                LabeledContent("Räume", value: "\(appModel.areas.count)")
                 LabeledContent("Geräte", value: "\(appModel.devices.count)")
-                LabeledContent("Registry", value: "\(appModel.entityRegistry.count)")
+                NavigationLink("Alle Entitäten") {
+                    EntityCatalogView(title: "Alle Entitäten", entities: appModel.entities, appModel: appModel)
+                }
+                NavigationLink("Aktionen & Dienste") {
+                    EntityCatalogView(title: "Aktionen & Dienste", entities: appModel.serviceLikeEntities, appModel: appModel)
+                }
+                NavigationLink("Entitäten ohne Raum") {
+                    EntityCatalogView(title: "Ohne Raum", entities: appModel.unassignedEntities, appModel: appModel)
+                }
             }
             Section("App") {
                 Label("Native iOS-App", systemImage: "iphone")
@@ -47,5 +47,37 @@ struct SystemView: View {
         case .connecting, .reconnecting: true
         default: false
         }
+    }
+}
+
+private struct EntityCatalogView: View {
+    let title: String
+    let entities: [HomeAssistantEntity]
+    let appModel: AppModel
+
+    var body: some View {
+        List {
+            ForEach(groupedDomains, id: \.domain) { group in
+                Section(group.domain) {
+                    ForEach(group.entities) { entity in
+                        NavigationLink {
+                            EntityControlView(entityID: entity.entityID, appModel: appModel)
+                        } label: {
+                            EntityRow(entity: entity)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var groupedDomains: [(domain: String, entities: [HomeAssistantEntity])] {
+        Dictionary(grouping: entities, by: \.domain)
+            .map { domain, entities in
+                (domain, entities.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending })
+            }
+            .sorted { $0.domain < $1.domain }
     }
 }

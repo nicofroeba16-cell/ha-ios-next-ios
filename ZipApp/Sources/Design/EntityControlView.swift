@@ -1,5 +1,5 @@
-import Foundation
 import SwiftUI
+import Foundation
 
 struct EntityControlView: View {
     let entityID: String

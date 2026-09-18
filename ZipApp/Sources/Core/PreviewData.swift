@@ -1,36 +1,46 @@
 import Foundation
 
+private struct LiveHAFixture: Decodable {
+    let areas: [Area]
+    let devices: [Device]
+    let entities: [Entity]
+
+    struct Area: Decodable { let id: String; let name: String }
+    struct Device: Decodable { let id: String; let name: String; let areaID: String?; let disabled: Bool }
+    struct Entity: Decodable {
+        let entityID: String
+        let deviceID: String?
+        let areaID: String?
+        let state: String
+        let attributes: [String: JSONValue]
+        let disabled: Bool
+        let hidden: Bool
+        let platform: String?
+    }
+}
+
 extension AppModel {
     static var preview: AppModel {
         let model = AppModel()
         model.connectionState = .connected
-        model.entities = [
-            .init(
-                entityID: "light.hintergrund_fernseher",
-                state: "on",
-                attributes: ["friendly_name": .string("Hintergrund Fernseher"), "brightness": .number(180)]
-            ),
-            .init(entityID: "light.nachttisch", state: "off", attributes: ["friendly_name": .string("Nachttisch")]),
-            .init(
-                entityID: "media_player.schlafzimmer",
-                state: "playing",
-                attributes: [
-                    "friendly_name": .string("Schlafzimmer"),
-                    "media_title": .string("Beispieltitel"),
-                    "volume_level": .number(0.35)
-                ]
-            )
-        ]
-        model.areas = [.init(id: "timo_zimmer", name: "Timo Zimmer")]
-        model.devices = [
-            .init(id: "light-device", name: "Licht", areaID: "timo_zimmer"),
-            .init(id: "media-device", name: "Medienplayer", areaID: "timo_zimmer")
-        ]
-        model.entityRegistry = [
-            .init(entityID: "light.hintergrund_fernseher", deviceID: "light-device", areaID: nil),
-            .init(entityID: "light.nachttisch", deviceID: "light-device", areaID: nil),
-            .init(entityID: "media_player.schlafzimmer", deviceID: "media-device", areaID: nil)
-        ]
+        guard let url = Bundle.main.url(forResource: "live_ha_fixture", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let fixture = try? JSONDecoder().decode(LiveHAFixture.self, from: data) else {
+            return fallbackPreview(model)
+        }
+        model.areas = fixture.areas.map { .init(id: $0.id, name: $0.name) }
+        model.devices = fixture.devices.map { .init(id: $0.id, name: $0.name, areaID: $0.areaID) }
+        model.entityRegistry = fixture.entities.map {
+            .init(entityID: $0.entityID, deviceID: $0.deviceID, areaID: $0.areaID)
+        }
+        model.entities = fixture.entities.map {
+            .init(entityID: $0.entityID, state: $0.state, attributes: $0.attributes)
+        }
+        return model
+    }
+
+    private static func fallbackPreview(_ model: AppModel) -> AppModel {
+        model.entities = [.init(entityID: "sensor.fixture_error", state: "unavailable", attributes: ["friendly_name": .string("Live-HA-Fixture nicht geladen")])]
         return model
     }
 }
