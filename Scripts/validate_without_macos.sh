@@ -38,6 +38,8 @@ if [[ -n "$credential_matches" ]]; then
   exit 1
 fi
 
+python3 Scripts/validate_visual_acceptance_matrix.py
+
 PYTHONPATH=Backend python3 -m unittest discover -s Backend/tests >/dev/null
 
 echo 'Non-macOS validation passed.'
