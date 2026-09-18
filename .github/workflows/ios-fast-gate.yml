@@ -1,6 +1,12 @@
 name: iOS Screenshot Capture
 on:
   workflow_dispatch:
+    inputs:
+      run_matrix:
+        description: Run extended visual QA matrix
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -70,6 +76,7 @@ jobs:
           find "$OUT" -type f -maxdepth 2 -print
           test "$(find "$OUT" -type f | wc -l | tr -d ' ')" -ge 20
       - name: Capture accessibility and display-size matrix
+        if: ${{ inputs.run_matrix }}
         working-directory: ZipApp
         run: |
           set -euo pipefail
@@ -106,6 +113,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
       - name: Upload visual QA matrix
+        if: ${{ inputs.run_matrix }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: IOSNext-Visual-QA-Matrix
