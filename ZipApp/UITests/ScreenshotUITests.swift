@@ -21,6 +21,13 @@ final class ScreenshotUITests: XCTestCase {
         ] {
             tapEnsuringVisible(label, maxSwipes: 5)
             capture(name)
+            if label == "Nico-Zimmer" {
+                app.swipeUp()
+                capture("02b-room-nico-controls")
+            } else if label == "Hütte" {
+                app.swipeUp()
+                capture("04b-room-huette-lighting")
+            }
             tapBack()
         }
 
@@ -29,14 +36,12 @@ final class ScreenshotUITests: XCTestCase {
 
         for (label, name) in [
             ("Arbeitszimmer", "08-room-arbeitszimmer"),
-            ("Ambiente", "09-room-ambiente"),
             ("Dienst", "10-room-dienst"),
             ("Flur", "11-room-flur"),
             ("Handys", "12-room-handys"),
             ("Juli Zimmer", "13-room-juli"),
             ("Mika Zimmer", "14-room-mika"),
-            ("Rasen", "15-room-rasen"),
-            ("Tisch", "16-room-tisch")
+            ("Rasen", "15-room-rasen")
         ] {
             tapEnsuringVisible(label, maxSwipes: 12)
             capture(name)
