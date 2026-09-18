@@ -1,0 +1,76 @@
+name: iOS Screenshot Capture
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-screenshot-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  capture:
+    name: Isolated iPhone screenshot capture
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Prove simulator environment
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
+          if ! xcrun simctl list devices available | grep -F "iPhone 18 Pro Max" >/dev/null; then
+            runtime_id="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(r["identifier"] for r in d["runtimes"] if r.get("isAvailable", True) and r.get("name")=="iOS 27.0"))')"
+            dtype="$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["identifier"] for x in d["devicetypes"] if x.get("name")=="iPhone 18 Pro Max"))')"
+            xcrun simctl create "iPhone 18 Pro Max" "$dtype" "$runtime_id"
+          fi
+      - name: Ensure tools
+        run: |
+          set -euo pipefail
+          command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Generate isolated project
+        working-directory: ZipApp
+        run: xcodegen generate
+      - name: Build preflight
+        working-directory: ZipApp
+        run: |
+          set -euo pipefail
+          DERIVED="$RUNNER_TEMP/iosnext-screenshot-derived"
+          rm -rf "$DERIVED"
+          xcodebuild build-for-testing -project IOSNext.xcodeproj -scheme IOSNext \
+            -derivedDataPath "$DERIVED" \
+            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Capture all view screenshots
+        working-directory: ZipApp
+        run: |
+          set -euo pipefail
+          DERIVED="$RUNNER_TEMP/iosnext-screenshot-derived"
+          RESULT="$RUNNER_TEMP/IOSNext-Screenshots.xcresult"
+          OUT="$GITHUB_WORKSPACE/IOSNext-All-View-Screenshots"
+          udid="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[x for k,v in d["devices"].items() if k.endswith("iOS-27-0") for x in v if x.get("isAvailable",True) and x["name"]=="iPhone 18 Pro Max"]; assert m; print(m[0]["udid"])')"
+          xcrun simctl shutdown "$udid" 2>/dev/null || true
+          xcrun simctl erase "$udid"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          app_path="$DERIVED/Build/Products/Debug-iphonesimulator/IOSNext.app"
+          xcrun simctl install "$udid" "$app_path"
+          xcrun simctl launch "$udid" de.nicofroeba16.iosnext --video-demo
+          sleep 2
+          rm -rf "$RESULT" "$OUT"
+          xcodebuild test-without-building -project IOSNext.xcodeproj -scheme IOSNext \
+            -derivedDataPath "$DERIVED" \
+            -destination "platform=iOS Simulator,id=$udid" \
+            -resultBundlePath "$RESULT" \
+            -only-testing:IOSNextUITests/ScreenshotUITests/testCaptureAllViews \
+            CODE_SIGNING_ALLOWED=NO
+          mkdir -p "$OUT"
+          xcrun xcresulttool export attachments --path "$RESULT" --output-path "$OUT"
+          find "$OUT" -type f -maxdepth 2 -print
+          test "$(find "$OUT" -type f | wc -l | tr -d ' ')" -ge 20
+      - name: Upload screenshots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: IOSNext-All-View-Screenshots
+          path: IOSNext-All-View-Screenshots
+          if-no-files-found: error
+          retention-days: 1
