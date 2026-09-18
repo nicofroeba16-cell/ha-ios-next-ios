@@ -1,250 +1,61 @@
-name: iOS 27 Fast Gate
-
+name: iOS ZIP Video Capture
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "Sources/**"
-      - "Tests/**"
-      - "UITests/**"
-      - "WireGuard/**"
-      - "Backend/**"
-      - "Scripts/**"
-      - "project.yml"
-      - "Info.plist"
-      - ".github/workflows/**"
-
 permissions:
   contents: read
-
 concurrency:
-  group: ios-27-fast-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: ios-zip-video-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
-  portable:
-    name: Portable security/backend
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Run portable validation
-        run: bash Scripts/validate_without_macos.sh
-
-  ios-fast:
-    name: Xcode 27 build/test
+  capture:
+    name: Isolated iPhone video capture
     runs-on: xcode-27
-    env:
-      CI_RUNTIME_SCOPE: fast
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - name: Activate pinned Go toolchain
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: 1.25.14
-          cache: false
-
-      - name: Prove Xcode 27 environment
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Prove simulator environment
         run: |
           set -euo pipefail
           xcodebuild -version
-          simulator_sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
-          echo "iOS Simulator SDK: $simulator_sdk"
-          test "$simulator_sdk" = "27.0"
-
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
           if ! xcrun simctl list devices available | grep -F "iPhone 18 Pro Max" >/dev/null; then
-            runtime_id="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[r["identifier"] for r in data["runtimes"] if r.get("isAvailable", True) and r.get("name")=="iOS 27.0"]; print(matches[0] if len(matches)==1 else "")')"
-            device_type_id="$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[d["identifier"] for d in data["devicetypes"] if d.get("name")=="iPhone 18 Pro Max"]; print(matches[0] if len(matches)==1 else "")')"
-            if [ -z "$runtime_id" ] || [ -z "$device_type_id" ]; then
-              echo "Runner image cannot provide iPhone 18 Pro Max / iOS 27.0" >&2
-              echo "ImageVersion=${ImageVersion:-unknown}" >&2
-              xcrun simctl list runtimes >&2 || true
-              xcrun simctl list devicetypes >&2 || true
-              exit 1
-            fi
-            echo "Creating iPhone 18 Pro Max simulator for this job"
-            xcrun simctl create "iPhone 18 Pro Max" "$device_type_id" "$runtime_id"
+            runtime_id="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(r["identifier"] for r in d["runtimes"] if r.get("isAvailable", True) and r.get("name")=="iOS 27.0"))')"
+            dtype="$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["identifier"] for x in d["devicetypes"] if x.get("name")=="iPhone 18 Pro Max"))')"
+            xcrun simctl create "iPhone 18 Pro Max" "$dtype" "$runtime_id"
           fi
-
-          xcrun simctl list devices available | grep -F "iPhone 18 Pro Max"
-          go version
-
-      - name: Start iPhone simulator early
-        run: |
-          set -euo pipefail
-          source Scripts/ci_runtime.sh
-          read -r IOSNEXT_IPHONE_UDID IOSNEXT_IPHONE_STATE < <(
-            xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); matches=[d for runtime,devices in data["devices"].items() if runtime.endswith("iOS-27-0") for d in devices if d.get("isAvailable", True) and d["name"]=="iPhone 18 Pro Max"]; assert len(matches)==1, f"expected exactly one iPhone 18 Pro Max on iOS 27.0, got {len(matches)}"; d=matches[0]; print(d["udid"], d["state"])'
-          )
-          test -n "$IOSNEXT_IPHONE_UDID"
-          echo "IOSNEXT_IPHONE_UDID=$IOSNEXT_IPHONE_UDID" >> "$GITHUB_ENV"
-          runtime_start simulator_boot_overlap
-          case "$IOSNEXT_IPHONE_STATE" in
-            Shutdown)
-              xcrun simctl boot "$IOSNEXT_IPHONE_UDID"
-              runtime_count simulator_boots
-              ;;
-            Booted)
-              ;;
-            *)
-              echo "Unexpected simulator state: $IOSNEXT_IPHONE_STATE" >&2
-              exit 1
-              ;;
-          esac
-
       - name: Ensure XcodeGen
         run: |
           set -euo pipefail
-          if command -v xcodegen >/dev/null 2>&1; then
-            xcodegen --version
-          else
-            brew install xcodegen
-          fi
-
-      - name: Prepare pinned WireGuard source
-        run: bash Scripts/prepare_wireguard_dependency.sh
-
-      - name: Generate project
+          command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Generate isolated project
+        working-directory: ZipApp
+        run: xcodegen generate
+      - name: Record full UI tour
+        working-directory: ZipApp
         run: |
           set -euo pipefail
-          xcodegen generate
-
-      - name: Build once for testing
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing \
-            -project IOSNext.xcodeproj \
-            -scheme IOSNext \
-            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
-            | tee xcodebuild-fast.log
-
-      - name: Verify packet tunnel metadata
-        run: |
-          set -euo pipefail
-          appex_info="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Debug-iphonesimulator/IOSNextPacketTunnel.appex/Info.plist' -print -quit)"
-          test -f "$appex_info"
-          test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$appex_info")" = "com.apple.networkextension.packet-tunnel"
-          test -n "$(plutil -extract NSExtension.NSExtensionPrincipalClass raw -o - "$appex_info")"
-
-      - name: Start fake Home Assistant test server
-        run: |
-          set -euo pipefail
-          python3 -m py_compile Scripts/fake_ha_websocket_server.py
-          rm -f fake-ha.port
-          : > fake-ha.log
-          python3 Scripts/fake_ha_websocket_server.py --port 0 --port-file fake-ha.port > fake-ha.log 2>&1 &
-          pid=$!
-          echo "$pid" > fake-ha.pid
-
-          ready=0
-          for _ in {1..80}; do
-            if ! kill -0 "$pid" 2>/dev/null; then
-              cat fake-ha.log
-              exit 1
-            fi
-            if [ -s fake-ha.port ]; then
-              ready=1
-              break
-            fi
-            sleep 0.1
-          done
-
-          if [ "$ready" -ne 1 ]; then
-            cat fake-ha.log
-            exit 1
-          fi
-
-          port="$(cat fake-ha.port)"
-          test -n "$port"
-          kill -0 "$pid"
-          nc -z 127.0.0.1 "$port"
-          echo "FAKE_HA_PORT=$port" >> "$GITHUB_ENV"
-          echo "Using isolated fake HA port $port"
-      - name: Inject fake Home Assistant port into xctestrun
-        run: |
-          set -euo pipefail
-          xctestrun="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type f -name '*.xctestrun' -print -quit)"
-          test -f "$xctestrun"
-          python3 - "$xctestrun" "$FAKE_HA_PORT" <<'PY'
-          import plistlib
-          import sys
-
-          path, port = sys.argv[1], sys.argv[2]
-          with open(path, "rb") as handle:
-              payload = plistlib.load(handle)
-
-          updated = 0
-
-          def visit(node):
-              global updated
-              if isinstance(node, dict):
-                  blueprint = str(node.get("BlueprintName", ""))
-                  test_bundle = str(node.get("TestBundlePath", ""))
-                  if blueprint == "IOSNextTests" or "IOSNextTests" in test_bundle:
-                      env = node.setdefault("EnvironmentVariables", {})
-                      env["FAKE_HA_PORT"] = port
-                      updated += 1
-                  for value in node.values():
-                      visit(value)
-              elif isinstance(node, list):
-                  for value in node:
-                      visit(value)
-
-          visit(payload)
-
-          if updated == 0:
-              for key, value in payload.items():
-                  if key.startswith("__") or not isinstance(value, dict):
-                      continue
-                  bundle = str(value.get("TestBundlePath", ""))
-                  if "IOSNextTests" in key or "IOSNextTests" in bundle:
-                      value.setdefault("EnvironmentVariables", {})["FAKE_HA_PORT"] = port
-                      updated += 1
-
-          if updated == 0:
-              raise SystemExit("No IOSNextTests target found in xctestrun")
-
-          with open(path, "wb") as handle:
-              plistlib.dump(payload, handle)
-
-          print(f"Injected FAKE_HA_PORT={port} into {updated} IOSNextTests target(s)")
-          PY
-          echo "XCTESTRUN_PATH=$xctestrun" >> "$GITHUB_ENV"
-      - name: Run tests without rebuilding
-        run: |
-          set -o pipefail
-          xcodebuild test-without-building \
-            -xctestrun "$XCTESTRUN_PATH" \
-            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
-            -only-testing:IOSNextTests \
-            -resultBundlePath FastTestResults.xcresult \
-            | tee -a xcodebuild-fast.log
-
-      - name: Show fake Home Assistant log on failure
-        if: failure()
-        run: cat fake-ha.log || true
-
-      - name: Stop fake Home Assistant test server
-        if: always()
-        run: |
-          if [ -f fake-ha.pid ]; then
-            kill "$(cat fake-ha.pid)" 2>/dev/null || true
-          fi
-
-      - name: Render runtime telemetry
-        if: always()
-        run: |
-          source Scripts/ci_runtime.sh
-          runtime_render_json ci-runtime-fast.json
-
-      - name: Upload runtime telemetry
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+          udid="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[x for k,v in d["devices"].items() if k.endswith("iOS-27-0") for x in v if x.get("isAvailable",True) and x["name"]=="iPhone 18 Pro Max"]; assert m; print(m[0]["udid"])')"
+          xcrun simctl shutdown "$udid" 2>/dev/null || true
+          xcrun simctl erase "$udid"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          video="$GITHUB_WORKSPACE/IOSNext-Xcode-Test-All-Pages.mp4"
+          xcrun simctl io "$udid" recordVideo --codec=h264 "$video" >"$RUNNER_TEMP/record-video.log" 2>&1 &
+          recorder=$!
+          finish() { kill -INT "$recorder" 2>/dev/null || true; wait "$recorder" 2>/dev/null || true; }
+          trap finish EXIT
+          xcodebuild test -project IOSNext.xcodeproj -scheme IOSNext \
+            -destination "platform=iOS Simulator,id=$udid" \
+            -only-testing:IOSNextUITests/VideoTourUITests/testRecordAllPages \
+            CODE_SIGNING_ALLOWED=NO
+          finish
+          trap - EXIT
+          test -s "$video"
+          ls -lh "$video"
+      - name: Upload video only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ios-27-fast-runtime
+          name: IOSNext-Xcode-Test-All-Pages
+          path: IOSNext-Xcode-Test-All-Pages.mp4
           if-no-files-found: error
-          retention-days: 14
-          path: ci-runtime-fast.json
-
+          retention-days: 1
