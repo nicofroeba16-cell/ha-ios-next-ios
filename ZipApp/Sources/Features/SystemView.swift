@@ -5,9 +5,18 @@ struct SystemView: View {
     @State private var isConfirmingForgetConnection = false
 
     private var warningEntities: [HomeAssistantEntity] {
-        appModel.entities.filter { entity in
-            let id = entity.entityID.lowercased()
-            return id.contains("warnung") && !id.contains("quittiert")
+        let candidates = appModel.entities
+            .filter { entity in
+                let id = entity.entityID.lowercased()
+                return ["sensor", "binary_sensor"].contains(entity.domain)
+                    && id.contains("warnung")
+                    && !id.contains("quittiert")
+            }
+            .sorted { $0.entityID.count < $1.entityID.count }
+
+        var seen = Set<String>()
+        return candidates.filter { entity in
+            seen.insert(entity.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()).inserted
         }
     }
 
