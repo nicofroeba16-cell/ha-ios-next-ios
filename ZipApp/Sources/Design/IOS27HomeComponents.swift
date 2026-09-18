@@ -164,18 +164,6 @@ struct HomeMetricTile: View {
     }
 }
 
-struct IOS27PressStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.985 : 1))
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
-    }
-}
-
-
 struct IOS27GlassControlGroup<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: () -> Content
@@ -209,7 +197,11 @@ struct IOS27GlassButtonStyle: ViewModifier {
                 content.buttonStyle(.glass)
             }
         } else {
-            content.buttonStyle(IOS27PressStyle())
+            if prominent {
+                content.buttonStyle(.borderedProminent)
+            } else {
+                content.buttonStyle(.bordered)
+            }
         }
     }
 }

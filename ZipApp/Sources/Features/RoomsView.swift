@@ -35,7 +35,7 @@ struct RoomsView: View {
                                     detail: "\(appModel.entities(inArea: area.id).filter(\.isOn).count) aktiv"
                                 )
                             }
-                            .buttonStyle(IOS27PressStyle())
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -107,7 +107,7 @@ struct RoomDetailView: View {
                                 tint: entity.isOn ? .green : .secondary
                             )
                         }
-                        .buttonStyle(IOS27PressStyle())
+                        .buttonStyle(.plain)
                     }
                 }
 

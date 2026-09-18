@@ -39,7 +39,7 @@ struct HomeView: View {
                                 } label: {
                                     roomCard(area: area, item: item)
                                 }
-                                .buttonStyle(IOS27PressStyle())
+                                .buttonStyle(.plain)
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(item.title)
                                 .accessibilityValue("\(appModel.devices(inArea: area.id).count) Geräte, \(activeCount(in: area)) aktiv")
@@ -123,7 +123,7 @@ struct HomeView: View {
             .ios27ContentSurface(radius: 30, elevated: true)
             .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
-        .buttonStyle(IOS27PressStyle())
+        .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Nico-Zimmer")
         .accessibilityValue("\(appModel.devices(inArea: area.id).count) Geräte, \(activeCount(in: area)) aktiv")

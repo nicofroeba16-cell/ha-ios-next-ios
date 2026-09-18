@@ -65,7 +65,7 @@ struct ScenesView: View {
                         .padding(14)
                         .ios27ContentSurface(radius: 22)
                     }
-                    .buttonStyle(IOS27PressStyle())
+                    .buttonStyle(.plain)
                 }
             }
         }

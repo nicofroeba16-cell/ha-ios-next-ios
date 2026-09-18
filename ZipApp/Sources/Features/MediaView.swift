@@ -48,7 +48,7 @@ struct MediaView: View {
                         } label: {
                             IOS27MediaCard(player: player, appModel: appModel)
                         }
-                        .buttonStyle(IOS27PressStyle())
+                        .buttonStyle(.plain)
                     }
                 }
 

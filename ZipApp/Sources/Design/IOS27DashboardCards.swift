@@ -302,12 +302,17 @@ struct IOS27FireTVCompanionCard: View {
                 .frame(maxWidth: .infinity)
             }
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    capabilityChips
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    capabilityChips
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Unterstützt")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        capabilityLabels
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        capabilityLabels
+                    }
                 }
             }
 
@@ -346,19 +351,17 @@ struct IOS27FireTVCompanionCard: View {
     }
 
     @ViewBuilder
-    private var capabilityChips: some View {
-        capabilityChip("Player", "play.fill")
-        capabilityChip("Apps", "square.grid.2x2.fill")
-        capabilityChip("Remote", "remote.fill")
-        capabilityChip("Queue", "list.bullet")
+    private var capabilityLabels: some View {
+        capabilityLabel("Player", "play.fill")
+        capabilityLabel("Apps", "square.grid.2x2.fill")
+        capabilityLabel("Remote", "remote.fill")
+        capabilityLabel("Queue", "list.bullet")
     }
 
-    private func capabilityChip(_ text: String, _ symbol: String) -> some View {
+    private func capabilityLabel(_ text: String, _ symbol: String) -> some View {
         Label(text, systemImage: symbol)
-            .font(.caption2.weight(.medium))
+            .font(.caption)
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .background(Color.secondary.opacity(0.08), in: Capsule())
+            .accessibilityLabel("Unterstützt: \(text)")
     }
 }
