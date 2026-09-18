@@ -92,6 +92,23 @@ struct RoomDetailView: View {
                     detail: "\(roomEntities.filter(\.isOn).count) aktiv"
                 )
 
+                if !otherControls.isEmpty {
+                    IOS27SectionHeader(title: "Steuerung", subtitle: "Primäre Raumaktionen")
+                    ForEach(otherControls) { entity in
+                        NavigationLink {
+                            EntityControlView(entityID: entity.entityID, appModel: appModel)
+                        } label: {
+                            IOS27StatusCard(
+                                title: entity.displayName,
+                                value: entity.secondaryStateText,
+                                symbol: entity.iconName,
+                                tint: entity.isOn ? .green : .secondary
+                            )
+                        }
+                        .buttonStyle(IOS27PressStyle())
+                    }
+                }
+
                 if !lights.isEmpty {
                     IOS27SectionHeader(title: "Licht", subtitle: "Direkte Raumsteuerung")
                     ForEach(lights) { entity in
@@ -110,39 +127,26 @@ struct RoomDetailView: View {
                     }
                 }
 
-                if !otherControls.isEmpty {
-                    IOS27SectionHeader(title: "Weitere Steuerung")
-                    ForEach(otherControls) { entity in
-                        NavigationLink {
-                            EntityControlView(entityID: entity.entityID, appModel: appModel)
-                        } label: {
-                            IOS27StatusCard(
-                                title: entity.displayName,
-                                value: entity.secondaryStateText,
-                                symbol: entity.iconName,
-                                tint: entity.isOn ? .green : .secondary
-                            )
-                        }
-                        .buttonStyle(IOS27PressStyle())
-                    }
-                }
-
                 let devices = appModel.devices(inArea: area.id)
                 if !devices.isEmpty {
-                    IOS27SectionHeader(title: "Geräte", subtitle: "Technische Geräteebene")
-                    VStack(spacing: 0) {
-                        ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
-                            NavigationLink {
-                                DeviceDetailView(device: device, appModel: appModel)
-                            } label: {
-                                DeviceRow(device: device, entityCount: appModel.entities(forDevice: device.id).count)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 7)
+                    IOS27SectionHeader(title: "Technische Details", subtitle: "Geräte und Entitäten")
+                    DisclosureGroup("Geräte (\(devices.count))") {
+                        VStack(spacing: 0) {
+                            ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
+                                NavigationLink {
+                                    DeviceDetailView(device: device, appModel: appModel)
+                                } label: {
+                                    DeviceRow(device: device, entityCount: appModel.entities(forDevice: device.id).count)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 7)
+                                }
+                                .buttonStyle(.plain)
+                                if index != devices.indices.last { Divider().padding(.leading, 56) }
                             }
-                            .buttonStyle(.plain)
-                            if index != devices.indices.last { Divider().padding(.leading, 56) }
                         }
                     }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(14)
                     .ios27ContentSurface(radius: 24)
                 }
             }
