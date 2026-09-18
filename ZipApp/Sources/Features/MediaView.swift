@@ -15,7 +15,7 @@ struct MediaView: View {
     private var fireTVPlayers: [HomeAssistantEntity] { players.filter { $0.entityID.contains("fire_tv_companion") } }
     private var fireTVIDs: Set<String> { Set(fireTVPlayers.map(\.entityID)) }
     private var remainingPlayers: [HomeAssistantEntity] {
-        players.filter { !nicoIDs.contains($0.entityID) && !fireTVIDs.contains($0.entityID) && $0.entityID != "media_player.nico_medien" }
+        players.filter { !nicoIDs.contains($0.entityID) && !fireTVIDs.contains($0.entityID) }
     }
 
     var body: some View {
@@ -27,7 +27,7 @@ struct MediaView: View {
                         title: "Nico Medien",
                         subtitle: "Gemeinsame Medienzone",
                         players: nicoPlayers,
-                        masterState: entity("binary_sensor.nico_medien_aktiv") ?? entity("binary_sensor.nico_medien_aktiv_2"),
+                        masterState: entity("binary_sensor.nico_medien_aktiv"),
                         masterScript: entity("script.nico_medien_master_zentrale"),
                         appModel: appModel
                     )

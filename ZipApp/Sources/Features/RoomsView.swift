@@ -79,7 +79,6 @@ struct RoomDetailView: View {
     private var lights: [HomeAssistantEntity] {
         if isNicoRoom {
             let order = [
-                "light.kronach_kronach",
                 "light.kronach_fernseher_links",
                 "light.kronach_fernseher_rechts",
                 "light.kronach_schrank",
@@ -158,7 +157,7 @@ struct RoomDetailView: View {
                             title: "Nico Medien",
                             subtitle: "Apple TV und Denon gekoppelt · PlayStation separat",
                             players: media,
-                            masterState: entity("binary_sensor.nico_medien_aktiv") ?? entity("binary_sensor.nico_medien_aktiv_2"),
+                            masterState: entity("binary_sensor.nico_medien_aktiv"),
                             masterScript: entity("script.nico_medien_master_zentrale"),
                             appModel: appModel
                         )

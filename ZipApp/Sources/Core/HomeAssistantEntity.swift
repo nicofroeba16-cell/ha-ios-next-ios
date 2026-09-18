@@ -24,7 +24,6 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
 
     private var preferredPresentationName: String? {
         switch entityID {
-        case "light.kronach_kronach": "Licht-Master"
         case "light.kronach_fernseher_links": "TV links"
         case "light.kronach_fernseher_rechts": "TV rechts"
         case "light.kronach_schrank": "Schrank"

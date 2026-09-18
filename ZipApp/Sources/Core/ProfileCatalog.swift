@@ -37,7 +37,7 @@ enum ProfileCatalog {
             ProfileDefinition(
                 profile: .mika,
                 roomNames: ["Mika Zimmer"],
-                favoriteEntityIDs: ["media_player.fire_tv_192_168_178_54"]
+                favoriteEntityIDs: ["media_player.fire_tv_companion"]
             )
         case .juli:
             ProfileDefinition(profile: .juli, roomNames: ["Juli Zimmer"], favoriteEntityIDs: [])
