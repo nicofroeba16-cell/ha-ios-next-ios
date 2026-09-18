@@ -150,3 +150,26 @@ struct IOS27PressStyle: ButtonStyle {
             .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
+
+struct IOS27GlassButtonStyle: ViewModifier {
+    let prominent: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            if prominent {
+                content.buttonStyle(.glassProminent)
+            } else {
+                content.buttonStyle(.glass)
+            }
+        } else {
+            content.buttonStyle(IOS27PressStyle())
+        }
+    }
+}
+
+extension View {
+    func ios27GlassButton(prominent: Bool = false) -> some View {
+        modifier(IOS27GlassButtonStyle(prominent: prominent))
+    }
+}

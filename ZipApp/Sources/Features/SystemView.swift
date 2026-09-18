@@ -63,9 +63,9 @@ struct SystemView: View {
             Divider()
             HStack(spacing: 12) {
                 Button("Verwalten") { appModel.isPresentingConnection = true }
-                    .buttonStyle(.bordered)
+                    .ios27GlassButton()
                 Button("Aktualisieren") { Task { await appModel.refresh() } }
-                    .buttonStyle(.borderedProminent)
+                    .ios27GlassButton(prominent: true)
                     .disabled(isBusy)
                 Spacer()
             }

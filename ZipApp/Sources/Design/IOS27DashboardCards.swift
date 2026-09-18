@@ -43,9 +43,9 @@ struct IOS27LightCard: View {
                     Image(systemName: "power")
                         .font(.headline.weight(.semibold))
                         .frame(width: 42, height: 42)
-                        .background(entity.isOn ? Color.yellow.opacity(0.16) : Color.secondary.opacity(0.10), in: Circle())
                 }
-                .buttonStyle(IOS27PressStyle())
+                .ios27GlassButton()
+                .tint(entity.isOn ? .yellow : .secondary)
                 .accessibilityLabel(entity.isOn ? "Ausschalten" : "Einschalten")
             }
 
@@ -118,7 +118,7 @@ struct IOS27MediaCard: View {
                     } label: {
                         Image(systemName: effectiveVolumePlayer.isMuted == true ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.plain)
+                    .ios27GlassButton()
                 }
             }
         }
@@ -133,9 +133,9 @@ struct IOS27MediaCard: View {
             Image(systemName: symbol)
                 .font(prominent ? .title2.weight(.semibold) : .headline)
                 .frame(width: prominent ? 54 : 44, height: prominent ? 54 : 44)
-                .background(prominent ? Color.blue.opacity(0.16) : Color.secondary.opacity(0.09), in: Circle())
         }
-        .buttonStyle(IOS27PressStyle())
+        .ios27GlassButton(prominent: prominent)
+        .tint(.blue)
         .accessibilityLabel(label)
     }
 }
@@ -214,9 +214,9 @@ struct IOS27MediaZoneCard: View {
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
-                        .background(Color.blue.opacity(0.14), in: Capsule())
                 }
-                .buttonStyle(IOS27PressStyle())
+                .ios27GlassButton(prominent: true)
+                .tint(.blue)
             }
         }
         .padding(18)
@@ -282,7 +282,7 @@ struct IOS27FireTVCompanionCard: View {
                     } label: {
                         Image(systemName: player.isMuted == true ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.plain)
+                    .ios27GlassButton()
                 }
             }
         }
@@ -295,9 +295,9 @@ struct IOS27FireTVCompanionCard: View {
             Image(systemName: symbol)
                 .font(prominent ? .title2.weight(.semibold) : .headline)
                 .frame(width: prominent ? 52 : 44, height: prominent ? 52 : 44)
-                .background((prominent ? Color.orange : Color.secondary).opacity(prominent ? 0.16 : 0.09), in: Circle())
         }
-        .buttonStyle(IOS27PressStyle())
+        .ios27GlassButton(prominent: prominent)
+        .tint(.orange)
         .accessibilityLabel(label)
     }
 
