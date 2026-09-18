@@ -87,11 +87,24 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
         }
     }
 
+    var stateDisplayText: String {
+        switch state.lowercased() {
+        case "on": "Ein"
+        case "off": "Aus"
+        case "playing": "Wiedergabe"
+        case "paused": "Pausiert"
+        case "idle": "Bereit"
+        case "standby": "Standby"
+        case "unknown", "unavailable": "Nicht verfügbar"
+        case "problem": "Problem"
+        default: state.localizedCapitalized
+        }
+    }
+
     var secondaryStateText: String {
-        if !isAvailable { return state.localizedCapitalized }
         if domain == "media_player", let mediaTitle { return mediaTitle }
         if let unitOfMeasurement { return "\(state) \(unitOfMeasurement)" }
-        return state.localizedCapitalized
+        return stateDisplayText
     }
 
     var controlKind: EntityControlKind {

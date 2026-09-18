@@ -89,13 +89,13 @@ struct IOS27MediaCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.displayName).font(.headline)
-                    Text(player.mediaTitle ?? player.state.localizedCapitalized)
+                    Text(player.mediaTitle ?? player.stateDisplayText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 }
                 Spacer()
-                Text(player.state.localizedCapitalized)
+                Text(player.stateDisplayText)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(player.state == "playing" ? .green : .secondary)
             }
@@ -222,11 +222,11 @@ struct IOS27MediaZoneCard: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(player.displayName).font(.subheadline.weight(.semibold))
-                        Text(player.mediaTitle ?? player.state.localizedCapitalized)
+                        Text(player.mediaTitle ?? player.stateDisplayText)
                             .font(.caption2).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                     }
                     if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                    Text(player.state.localizedCapitalized)
+                    Text(player.stateDisplayText)
                         .font(.caption2)
                         .foregroundStyle(colorSchemeContrast == .increased ? .secondary : .tertiary)
                 }
@@ -268,7 +268,7 @@ struct IOS27FireTVCompanionCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.displayName).font(.title3.weight(.bold))
-                    Text(player.mediaTitle ?? player.state.localizedCapitalized)
+                    Text(player.mediaTitle ?? player.stateDisplayText)
                         .font(.caption).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 }
                 if !dynamicTypeSize.isAccessibilitySize { Spacer() }
