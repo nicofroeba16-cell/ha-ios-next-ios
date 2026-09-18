@@ -171,5 +171,7 @@ struct IOS27GlassButtonStyle: ViewModifier {
 extension View {
     func ios27GlassButton(prominent: Bool = false) -> some View {
         modifier(IOS27GlassButtonStyle(prominent: prominent))
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
