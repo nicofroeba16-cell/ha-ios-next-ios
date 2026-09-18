@@ -1,0 +1,148 @@
+name: iOS Unsigned IPA Proof
+
+on:
+  push:
+    branches:
+      - test/unsigned-ipa-proof-20260918-6ec56f8
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned-ipa:
+    name: Build unsigned device IPA
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact test source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Prove macOS and device SDK
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          echo "iphoneos SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
+          test -n "$(xcrun --sdk iphoneos --show-sdk-path)"
+
+      - name: Activate pinned Go toolchain
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: 1.25.14
+          cache: false
+
+      - name: Ensure XcodeGen
+        run: |
+          set -euo pipefail
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+          else
+            brew install xcodegen
+          fi
+
+      - name: Prepare pinned WireGuard source
+        run: bash Scripts/prepare_wireguard_dependency.sh
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Build Release device app without signing
+        run: |
+          set -euo pipefail
+          rm -rf build
+          xcodebuild build \
+            -project IOSNext.xcodeproj \
+            -scheme IOSNext \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Validate device app bundle
+        run: |
+          set -euo pipefail
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/IOSNext.app"
+          test -d "$APP"
+          test -f "$APP/Info.plist"
+          EXEC_NAME="$(plutil -extract CFBundleExecutable raw -o - "$APP/Info.plist")"
+          EXEC="$APP/$EXEC_NAME"
+          test -x "$EXEC"
+          BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP/Info.plist")"
+          test "$BUNDLE_ID" = "de.nicofroeba16.iosnext"
+          echo "App: $APP"
+          echo "Executable: $EXEC_NAME"
+          echo "Bundle ID: $BUNDLE_ID"
+          file "$EXEC"
+          ARCHS="$(lipo -archs "$EXEC")"
+          echo "Architectures: $ARCHS"
+          case " $ARCHS " in *" x86_64 "*) echo "Simulator architecture detected" >&2; exit 1;; esac
+          xcrun vtool -show-build "$EXEC" | tee device-build-metadata.txt
+          grep -Eq 'platform +IOS($| )' device-build-metadata.txt
+          if [ -f "$APP/embedded.mobileprovision" ]; then
+            echo "embedded.mobileprovision=present"
+          else
+            echo "embedded.mobileprovision=absent"
+          fi
+          set +e
+          codesign -dv --verbose=4 "$APP" >codesign-metadata.txt 2>&1
+          CODESIGN_RC=$?
+          set -e
+          echo "codesign_metadata_exit=$CODESIGN_RC"
+          cat codesign-metadata.txt
+          if [ "$CODESIGN_RC" -eq 0 ]; then
+            echo "code_signing_metadata=present"
+          else
+            echo "code_signing_metadata=absent_or_unsigned"
+          fi
+
+      - name: Package standard unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/IOSNext.app"
+          rm -rf ipa-root IOSNext-unsigned.ipa
+          mkdir -p ipa-root/Payload
+          ditto "$APP" ipa-root/Payload/IOSNext.app
+          (cd ipa-root && zip -qry "$GITHUB_WORKSPACE/IOSNext-unsigned.ipa" Payload)
+          test -s IOSNext-unsigned.ipa
+
+      - name: Validate IPA archive and record digest
+        run: |
+          set -euo pipefail
+          unzip -t IOSNext-unsigned.ipa
+          unzip -l IOSNext-unsigned.ipa | tee ipa-contents.txt
+          unzip -Z1 IOSNext-unsigned.ipa | grep -Fx 'Payload/IOSNext.app/Info.plist'
+          rm -rf ipa-check
+          mkdir ipa-check
+          unzip -q IOSNext-unsigned.ipa -d ipa-check
+          test -d ipa-check/Payload/IOSNext.app
+          test -f ipa-check/Payload/IOSNext.app/Info.plist
+          EXEC_NAME="$(plutil -extract CFBundleExecutable raw -o - ipa-check/Payload/IOSNext.app/Info.plist)"
+          test -x "ipa-check/Payload/IOSNext.app/$EXEC_NAME"
+          IPA_SIZE="$(stat -f%z IOSNext-unsigned.ipa)"
+          IPA_SHA256="$(shasum -a 256 IOSNext-unsigned.ipa | awk '{print $1}')"
+          echo "IPA_FILE=IOSNext-unsigned.ipa"
+          echo "IPA_SIZE_BYTES=$IPA_SIZE"
+          echo "IPA_SHA256=$IPA_SHA256"
+          {
+            echo "source_sha=$GITHUB_SHA"
+            echo "ipa_file=IOSNext-unsigned.ipa"
+            echo "artifact_name=iosnext-unsigned-ipa"
+            echo "size_bytes=$IPA_SIZE"
+            echo "sha256=$IPA_SHA256"
+          } | tee unsigned-ipa-metadata.txt
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: iosnext-unsigned-ipa
+          path: |
+            IOSNext-unsigned.ipa
+            unsigned-ipa-metadata.txt
+            ipa-contents.txt
+            device-build-metadata.txt
+            codesign-metadata.txt
+          if-no-files-found: error
+          retention-days: 7
