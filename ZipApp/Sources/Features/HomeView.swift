@@ -54,7 +54,7 @@ struct HomeView: View {
             }
         }
         .navigationTitle("Zuhause")
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.large)
     }
 
     private func sectionTitle(_ title: String) -> some View {

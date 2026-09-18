@@ -63,7 +63,8 @@ struct RoomsView: View {
             .padding(.bottom, 28)
         }
         .background(IOS27HomeBackground())
-        .navigationTitle("Räume & Geräte")
+        .navigationTitle("Räume")
+        .navigationBarTitleDisplayMode(.large)
     }
 }
 
@@ -150,7 +151,7 @@ struct RoomDetailView: View {
         }
         .background(IOS27HomeBackground())
         .navigationTitle(area.name)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func volumePlayer(for entity: HomeAssistantEntity) -> HomeAssistantEntity? {
@@ -173,6 +174,7 @@ private struct DeviceCollectionView: View {
             }
         }
         .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

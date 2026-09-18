@@ -65,6 +65,7 @@ struct MediaView: View {
         }
         .background(IOS27HomeBackground())
         .navigationTitle("Medien")
+        .navigationBarTitleDisplayMode(.large)
     }
 
     private func entity(_ id: String) -> HomeAssistantEntity? {

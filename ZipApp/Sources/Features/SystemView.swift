@@ -50,6 +50,7 @@ struct SystemView: View {
         }
         .background(IOS27HomeBackground())
         .navigationTitle("System")
+        .navigationBarTitleDisplayMode(.large)
     }
 
     private var connectionCard: some View {

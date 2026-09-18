@@ -39,6 +39,7 @@ struct ConnectionSetupView: View {
                 }
             }
             .navigationTitle("Verbinden")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Abbrechen") { dismiss() }

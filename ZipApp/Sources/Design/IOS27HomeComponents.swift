@@ -88,11 +88,6 @@ struct OwnerHomeHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ZUHAUSE")
-                .font(.caption2.weight(.bold))
-                .tracking(1.15)
-                .foregroundStyle(.secondary)
-
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Nico")

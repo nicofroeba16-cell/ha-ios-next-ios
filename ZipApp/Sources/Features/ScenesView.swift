@@ -22,6 +22,7 @@ struct ScenesView: View {
         }
         .background(IOS27HomeBackground())
         .navigationTitle("Szenen")
+        .navigationBarTitleDisplayMode(.large)
     }
 
     @ViewBuilder
