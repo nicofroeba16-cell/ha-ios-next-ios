@@ -153,6 +153,25 @@ final class IOSNextUITests: XCTestCase {
         element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
+    private func scrollUpUntilHittable(
+        _ element: XCUIElement,
+        in application: XCUIApplication,
+        label: String,
+        maxSwipes: Int = 4
+    ) {
+        XCTAssertTrue(element.waitForExistence(timeout: 3), "\(label) did not exist")
+
+        for _ in 0..<maxSwipes {
+            if element.isHittable {
+                return
+            }
+            application.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+
+        XCTAssertTrue(element.isHittable, "\(label) did not become hittable after \(maxSwipes) swipes")
+    }
+
     private func waitForVisualReady(
         _ screen: String,
         dark: Bool,
@@ -243,18 +262,22 @@ final class IOSNextUITests: XCTestCase {
             mediaRow.tap()
         }
 
+        let mediaSummary = application.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", "2 Player sind aktiv"))
+            .firstMatch
+        XCTAssertTrue(
+            mediaSummary.waitForExistence(timeout: 5),
+            "Native media tab did not expose the media summary"
+        )
+
         let fireTV = application.descendants(matching: .any)
-            .matching(identifier: "media-player-link-media_player.fire_tv_companion")
+            .matching(NSPredicate(format: "label CONTAINS %@", "Companion Testfilm"))
             .firstMatch
         XCTAssertTrue(
             fireTV.waitForExistence(timeout: 5),
             "Media tab did not expose the expected Fire TV content"
         )
-        if !fireTV.isHittable {
-            application.swipeUp()
-        }
-        XCTAssertTrue(fireTV.isHittable)
-        fireTV.tap()
+        tapWhenVisible(fireTV, in: application, label: "Fire TV Companion card")
 
         XCTAssertTrue(application.navigationBars["Fire TV Companion"].waitForExistence(timeout: 3))
         XCTAssertTrue(application.buttons["Pause"].waitForExistence(timeout: 3))
@@ -283,16 +306,11 @@ final class IOSNextUITests: XCTestCase {
         XCTAssertTrue(power.isEnabled)
 
         let brightness = application.sliders["light-brightness-slider"]
-        XCTAssertTrue(brightness.waitForExistence(timeout: 3))
-        if !brightness.isHittable {
-            application.swipeUp()
-        }
-        let hittable = NSPredicate(format: "hittable == true")
-        let hittableResult = XCTWaiter.wait(
-            for: [XCTNSPredicateExpectation(predicate: hittable, object: brightness)],
-            timeout: 4
+        scrollUpUntilHittable(
+            brightness,
+            in: application,
+            label: "Brightness slider"
         )
-        XCTAssertEqual(hittableResult, .completed, "Brightness slider did not become hittable")
         let before = brightness.value as? String
         brightness.adjust(toNormalizedSliderPosition: 0.28)
         let after = brightness.value as? String
