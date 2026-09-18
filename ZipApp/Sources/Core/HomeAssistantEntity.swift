@@ -13,12 +13,30 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
     var id: String { entityID }
 
     var displayName: String {
+        if let preferredPresentationName { return preferredPresentationName }
         if let friendly = attributes["friendly_name"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
            !friendly.isEmpty,
            friendly.localizedCaseInsensitiveCompare(entityID) != .orderedSame {
             return friendly
         }
         return presentationFallbackName
+    }
+
+    private var preferredPresentationName: String? {
+        switch entityID {
+        case "light.kronach_kronach": "Licht-Master"
+        case "light.kronach_fernseher_links": "TV links"
+        case "light.kronach_fernseher_rechts": "TV rechts"
+        case "light.kronach_schrank": "Schrank"
+        case "switch.schreibtisch_rgb_standlampe_steckdose_1": "Schreibtischlampe"
+        case "switch.tv_steckdose_1": "TV-Strom"
+        case "media_player.nico_zimmer_untergeschoss_apple_tv": "Apple TV"
+        case "media_player.denon_avr_x1300w": "Denon AVR"
+        case "media_player.playstation_5": "PlayStation 5"
+        case "light.hutte": "Ambiente"
+        case "light.tisch_tisch": "Tisch"
+        default: nil
+        }
     }
 
     private var presentationFallbackName: String {

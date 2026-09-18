@@ -75,10 +75,33 @@ struct RoomDetailView: View {
     let appModel: AppModel
 
     private var roomEntities: [HomeAssistantEntity] { appModel.entities(inArea: area.id) }
-    private var lights: [HomeAssistantEntity] { roomEntities.filter { $0.domain == "light" || ($0.domain == "switch" && $0.displayName.localizedCaseInsensitiveContains("licht")) } }
-    private var media: [HomeAssistantEntity] { roomEntities.filter { $0.domain == "media_player" } }
+    private var isNicoRoom: Bool { area.name.localizedCaseInsensitiveCompare("Nico Zimmer") == .orderedSame }
+    private var lights: [HomeAssistantEntity] {
+        if isNicoRoom {
+            let order = [
+                "light.kronach_kronach",
+                "light.kronach_fernseher_links",
+                "light.kronach_fernseher_rechts",
+                "light.kronach_schrank",
+                "switch.schreibtisch_rgb_standlampe_steckdose_1"
+            ]
+            return order.compactMap(entity)
+        }
+        return roomEntities.filter { $0.domain == "light" || ($0.domain == "switch" && $0.displayName.localizedCaseInsensitiveContains("licht")) }
+    }
+    private var media: [HomeAssistantEntity] {
+        if isNicoRoom {
+            return [
+                "media_player.nico_zimmer_untergeschoss_apple_tv",
+                "media_player.denon_avr_x1300w",
+                "media_player.playstation_5"
+            ].compactMap(entity)
+        }
+        return roomEntities.filter { $0.domain == "media_player" }
+    }
     private var otherControls: [HomeAssistantEntity] {
-        roomEntities.filter { entity in
+        guard !isNicoRoom else { return [] }
+        return roomEntities.filter { entity in
             !lights.contains(entity) && !media.contains(entity) && entity.isPrimaryRoomControl
         }
     }
@@ -118,14 +141,41 @@ struct RoomDetailView: View {
                     }
                 }
 
+                if isNicoRoom, let prisma = entity("scene.kronach_kronach_prisma") {
+                    IOS27SectionHeader(title: "Lichtszene", subtitle: "Referenz aus dem Home-Assistant-Dashboard")
+                    Button {
+                        Task { await appModel.activate(prisma) }
+                    } label: {
+                        IOS27StatusCard(title: "Prisma", value: "Aktivieren", symbol: "sparkles", tint: .purple)
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 if !media.isEmpty {
-                    IOS27SectionHeader(title: "Medien", subtitle: "Player und Receiver")
-                    ForEach(media) { entity in
-                        IOS27MediaCard(
-                            player: entity,
-                            appModel: appModel,
-                            volumePlayer: volumePlayer(for: entity)
+                    IOS27SectionHeader(title: "Medien", subtitle: isNicoRoom ? "Apple TV · Denon · PlayStation" : "Player und Receiver")
+                    if isNicoRoom {
+                        IOS27MediaZoneCard(
+                            title: "Nico Medien",
+                            subtitle: "Apple TV und Denon gekoppelt · PlayStation separat",
+                            players: media,
+                            masterState: entity("binary_sensor.nico_medien_aktiv") ?? entity("binary_sensor.nico_medien_aktiv_2"),
+                            masterScript: entity("script.nico_medien_master_zentrale"),
+                            appModel: appModel
                         )
+                        if let tvPower = entity("switch.tv_steckdose_1") {
+                            EntityRow(entity: tvPower) { Task { await appModel.toggle(tvPower) } }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .ios27ContentSurface(radius: 20)
+                        }
+                    } else {
+                        ForEach(media) { entity in
+                            IOS27MediaCard(
+                                player: entity,
+                                appModel: appModel,
+                                volumePlayer: volumePlayer(for: entity)
+                            )
+                        }
                     }
                 }
 
@@ -158,6 +208,10 @@ struct RoomDetailView: View {
         .background(IOS27HomeBackground())
         .navigationTitle(area.appDisplayName)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func entity(_ id: String) -> HomeAssistantEntity? {
+        appModel.entities.first { $0.entityID == id }
     }
 
     private func volumePlayer(for entity: HomeAssistantEntity) -> HomeAssistantEntity? {
