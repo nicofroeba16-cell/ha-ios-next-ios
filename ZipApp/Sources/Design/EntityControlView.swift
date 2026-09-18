@@ -132,7 +132,7 @@ private struct TemperatureControl: View {
     }
     var body: some View {
         VStack(alignment: .leading) {
-            LabeledContent("Solltemperatur", value: "\(value, specifier: "%.1f") °C")
+            LabeledContent("Solltemperatur", value: String(format: "%.1f °C", value))
             Slider(value: $value, in: 5 ... 35, step: 0.5) { editing in
                 if !editing { onCommit(value) }
             }
