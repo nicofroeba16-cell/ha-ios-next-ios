@@ -22,9 +22,6 @@ struct IOSNextApp: App {
 
 private struct QARenderingEnvironment: ViewModifier {
     @Environment(\.dynamicTypeSize) private var systemDynamicTypeSize
-    @Environment(\.colorSchemeContrast) private var systemColorSchemeContrast
-    @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     private let arguments = ProcessInfo.processInfo.arguments
 
@@ -32,9 +29,6 @@ private struct QARenderingEnvironment: ViewModifier {
         content
             .preferredColorScheme(preferredColorScheme)
             .environment(\.dynamicTypeSize, arguments.contains("--qa-accessibility-text") ? .accessibility3 : systemDynamicTypeSize)
-            .environment(\.colorSchemeContrast, arguments.contains("--qa-increased-contrast") ? .increased : systemColorSchemeContrast)
-            .environment(\.accessibilityReduceTransparency, arguments.contains("--qa-reduce-transparency") || systemReduceTransparency)
-            .environment(\.accessibilityReduceMotion, arguments.contains("--qa-reduce-motion") || systemReduceMotion)
     }
 
     private var preferredColorScheme: ColorScheme? {
