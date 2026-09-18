@@ -1,14 +1,14 @@
 import XCTest
 
 final class ScreenshotUITests: XCTestCase {
-    private let app = XCUIApplication()
+    private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app.activate()
     }
 
     func testCaptureAllViews() throws {
+        launch(arguments: ["--qa-dark"])
         XCTAssertTrue(app.staticTexts["Nico"].waitForExistence(timeout: 8))
         capture("01-home")
 
@@ -54,6 +54,42 @@ final class ScreenshotUITests: XCTestCase {
 
         tapTab("Zuhause")
         capture("20-home-final")
+    }
+
+
+    func testCaptureVisualMatrix() throws {
+        let variants: [(String, [String])] = [
+            ("dark", ["--qa-dark"]),
+            ("light", ["--qa-light"]),
+            ("contrast", ["--qa-dark", "--qa-increased-contrast"]),
+            ("reduced-transparency", ["--qa-dark", "--qa-reduce-transparency"]),
+            ("accessibility-text", ["--qa-dark", "--qa-accessibility-text"])
+        ]
+
+        for (name, arguments) in variants {
+            launch(arguments: arguments)
+            captureCoreViews(prefix: name)
+            app.terminate()
+        }
+    }
+
+    private func launch(arguments: [String]) {
+        app = XCUIApplication()
+        app.launchArguments = ["--video-demo"] + arguments
+        app.launch()
+    }
+
+    private func captureCoreViews(prefix: String) {
+        XCTAssertTrue(app.staticTexts["Nico"].waitForExistence(timeout: 8))
+        capture("\(prefix)-home")
+        tapTab("Räume")
+        capture("\(prefix)-rooms")
+        tapTab("Medien")
+        capture("\(prefix)-media")
+        tapTab("Szenen")
+        capture("\(prefix)-scenes")
+        tapTab("System")
+        capture("\(prefix)-system")
     }
 
     private func capture(_ name: String) {
