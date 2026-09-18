@@ -52,8 +52,8 @@ final class ScreenshotUITests: XCTestCase {
         capture("17-media")
 
         tapTab("System")
-        captureSecondaryScenes("18-scenes")
         capture("19-system")
+        captureSecondaryScenes("18-scenes")
 
         tapTab("Zuhause")
         capture("20-home-final")
@@ -90,8 +90,9 @@ final class ScreenshotUITests: XCTestCase {
         tapTab("Medien")
         capture("\(prefix)-media")
         tapTab("System")
-        captureSecondaryScenes("\(prefix)-scenes")
         capture("\(prefix)-system")
+        captureSecondaryScenes("\(prefix)-scenes")
+        tapTab("Zuhause")
     }
 
     private func captureSecondaryScenes(_ name: String) {
@@ -99,7 +100,6 @@ final class ScreenshotUITests: XCTestCase {
         if disclosure.waitForExistence(timeout: 5) { disclosure.tap() }
         tapEnsuringVisible("Szenen", maxSwipes: 4)
         capture(name)
-        tapBack()
     }
 
     private func capture(_ name: String) {
