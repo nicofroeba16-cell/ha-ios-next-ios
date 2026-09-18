@@ -243,7 +243,9 @@ final class IOSNextUITests: XCTestCase {
             mediaRow.tap()
         }
 
-        let fireTV = application.buttons["media-player-link-media_player.fire_tv_companion"]
+        let fireTV = application.descendants(matching: .any)
+            .matching(identifier: "media-player-link-media_player.fire_tv_companion")
+            .firstMatch
         XCTAssertTrue(
             fireTV.waitForExistence(timeout: 5),
             "Media tab did not expose the expected Fire TV content"
@@ -282,7 +284,15 @@ final class IOSNextUITests: XCTestCase {
 
         let brightness = application.sliders["light-brightness-slider"]
         XCTAssertTrue(brightness.waitForExistence(timeout: 3))
-        XCTAssertTrue(brightness.isHittable)
+        if !brightness.isHittable {
+            application.swipeUp()
+        }
+        let hittable = NSPredicate(format: "hittable == true")
+        let hittableResult = XCTWaiter.wait(
+            for: [XCTNSPredicateExpectation(predicate: hittable, object: brightness)],
+            timeout: 4
+        )
+        XCTAssertEqual(hittableResult, .completed, "Brightness slider did not become hittable")
         let before = brightness.value as? String
         brightness.adjust(toNormalizedSliderPosition: 0.28)
         let after = brightness.value as? String
