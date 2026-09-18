@@ -30,6 +30,13 @@ jobs:
       - name: Generate isolated project
         working-directory: ZipApp
         run: xcodegen generate
+      - name: Build preflight
+        working-directory: ZipApp
+        run: |
+          set -euo pipefail
+          xcodebuild build-for-testing -project IOSNext.xcodeproj -scheme IOSNext \
+            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
+            CODE_SIGNING_ALLOWED=NO
       - name: Record full UI tour
         working-directory: ZipApp
         run: |

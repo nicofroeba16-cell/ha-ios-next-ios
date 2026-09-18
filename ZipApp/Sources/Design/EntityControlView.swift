@@ -67,7 +67,7 @@ struct EntityControlView: View {
         case .climate:
             Section("Klima") {
                 if let current = entity.currentTemperature {
-                    LabeledContent("Aktuell", value: "\(current, specifier: "%.1f") °C")
+                    LabeledContent("Aktuell", value: String(format: "%.1f °C", current))
                 }
                 if let target = entity.targetTemperature {
                     TemperatureControl(value: target) {
