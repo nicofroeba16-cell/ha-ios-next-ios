@@ -53,7 +53,7 @@ struct HomeView: View {
                     systemStrip
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 28)
+                .padding(.bottom, 96)
             }
         }
         .navigationTitle("Zuhause")

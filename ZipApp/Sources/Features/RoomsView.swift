@@ -62,7 +62,7 @@ struct RoomsView: View {
 
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 28)
+            .padding(.bottom, 96)
         }
         .background(IOS27HomeBackground())
         .navigationTitle("Räume")
@@ -153,7 +153,7 @@ struct RoomDetailView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 28)
+            .padding(.bottom, 96)
         }
         .background(IOS27HomeBackground())
         .navigationTitle(area.name)

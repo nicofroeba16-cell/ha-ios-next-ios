@@ -44,7 +44,7 @@ struct SystemView: View {
                 diagnosticsCard
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 28)
+            .padding(.bottom, 96)
         }
         .background(IOS27HomeBackground())
         .navigationTitle("System")
