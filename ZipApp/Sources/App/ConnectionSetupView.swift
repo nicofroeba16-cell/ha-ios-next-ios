@@ -20,7 +20,7 @@ struct ConnectionSetupView: View {
                         guard let configuration = oauthConfiguration else { return }
                         Task { await appModel.connectOAuth(using: configuration) }
                     }
-                    .disabled(oauthConfiguration == nil || appModel.connectionState == .connecting)
+                    .disabled(oauthConfiguration == nil || isConnecting)
                 }
 #if DEBUG
                 Section("Lokale Entwicklungsverbindung") {
@@ -40,9 +40,11 @@ struct ConnectionSetupView: View {
             }
             .navigationTitle("Verbinden")
             .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(isConnecting)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Abbrechen") { dismiss() }
+                        .disabled(isConnecting)
                 }
 #if DEBUG
                 ToolbarItem(placement: .confirmationAction) {
@@ -50,10 +52,17 @@ struct ConnectionSetupView: View {
                         guard let url = URL(string: serverAddress), !accessToken.isEmpty else { return }
                         Task { await appModel.connect(serverURL: url, accessToken: accessToken) }
                     }
-                    .disabled(URL(string: serverAddress) == nil || accessToken.isEmpty || appModel.connectionState == .connecting)
+                    .disabled(URL(string: serverAddress) == nil || accessToken.isEmpty || isConnecting)
                 }
 #endif
             }
+        }
+    }
+
+    private var isConnecting: Bool {
+        switch appModel.connectionState {
+        case .connecting, .reconnecting: true
+        default: false
         }
     }
 
