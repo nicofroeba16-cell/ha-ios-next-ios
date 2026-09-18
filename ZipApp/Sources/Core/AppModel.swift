@@ -238,6 +238,15 @@ final class AppModel {
         )
     }
 
+    func seekRelative(_ offset: Double, for player: HomeAssistantEntity) async {
+        let current = player.attributes["media_position"]?.numberValue ?? 0
+        await callService(
+            for: player,
+            service: "media_seek",
+            data: ["seek_position": max(0, current + offset)]
+        )
+    }
+
     func setTemperature(_ value: Double, for climate: HomeAssistantEntity) async {
         await callService(for: climate, service: "set_temperature", data: ["temperature": value])
     }

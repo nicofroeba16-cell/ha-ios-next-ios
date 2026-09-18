@@ -3,124 +3,98 @@ import SwiftUI
 struct MediaView: View {
     let appModel: AppModel
 
+    private var players: [HomeAssistantEntity] { appModel.entities(inDomain: "media_player") }
+    private var nicoPlayers: [HomeAssistantEntity] {
+        [
+            entity("media_player.nico_zimmer_untergeschoss_apple_tv"),
+            entity("media_player.denon_avr_x1300w"),
+            entity("media_player.playstation_5")
+        ].compactMap { $0 }
+    }
+    private var nicoIDs: Set<String> { Set(nicoPlayers.map(\.entityID)) }
+    private var fireTVPlayers: [HomeAssistantEntity] { players.filter { $0.entityID.contains("fire_tv_companion") } }
+    private var fireTVIDs: Set<String> { Set(fireTVPlayers.map(\.entityID)) }
+    private var remainingPlayers: [HomeAssistantEntity] {
+        players.filter { !nicoIDs.contains($0.entityID) && !fireTVIDs.contains($0.entityID) && $0.entityID != "media_player.nico_medien" }
+    }
+
     var body: some View {
-        List {
-            Section("Wiedergabe") {
-                let players = appModel.entities(inDomain: "media_player")
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                if !nicoPlayers.isEmpty {
+                    IOS27SectionHeader(title: "Nico Medien", subtitle: "Apple TV · Denon · PlayStation")
+                    IOS27MediaZoneCard(
+                        title: "Nico Medien",
+                        subtitle: "Gemeinsame Medienzone",
+                        players: nicoPlayers,
+                        masterState: entity("binary_sensor.nico_medien_aktiv") ?? entity("binary_sensor.nico_medien_aktiv_2"),
+                        masterScript: entity("script.nico_medien_master_zentrale"),
+                        appModel: appModel
+                    )
+                }
+
+                if !fireTVPlayers.isEmpty {
+                    IOS27SectionHeader(title: "Fire TV Companion", subtitle: "Capability-basierte Steuerung")
+                    ForEach(fireTVPlayers) { player in
+                        IOS27FireTVCompanionCard(player: player, appModel: appModel)
+                    }
+                }
+
+                if !remainingPlayers.isEmpty {
+                    IOS27SectionHeader(title: "Weitere Medien", subtitle: "Receiver, Cast und TV")
+                    ForEach(remainingPlayers) { player in
+                        NavigationLink {
+                            MediaDetailView(playerID: player.entityID, appModel: appModel)
+                        } label: {
+                            IOS27MediaCard(player: player, appModel: appModel)
+                        }
+                        .buttonStyle(IOS27PressStyle())
+                    }
+                }
+
                 if players.isEmpty {
                     EmptyFeatureView(
                         title: "Keine Medienplayer",
                         symbol: "play.tv",
                         message: "Verbundene Home-Assistant-Medienplayer erscheinen hier automatisch."
                     )
-                } else {
-                    ForEach(players) { player in
-                        NavigationLink {
-                            MediaDetailView(playerID: player.entityID, appModel: appModel)
-                        } label: {
-                            EntityRow(entity: player)
-                        }
-                    }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 28)
         }
+        .background(IOS27HomeBackground())
         .navigationTitle("Medien")
+    }
+
+    private func entity(_ id: String) -> HomeAssistantEntity? {
+        appModel.entities.first { $0.entityID == id }
     }
 }
 
-private struct MediaDetailView: View {
+struct MediaDetailView: View {
     let playerID: String
     let appModel: AppModel
 
-    private var player: HomeAssistantEntity? {
-        appModel.entities.first { $0.entityID == playerID }
-    }
+    private var player: HomeAssistantEntity? { appModel.entities.first { $0.entityID == playerID } }
 
     var body: some View {
-        List {
-            if let player {
-                Section {
-                    VStack(spacing: 8) {
-                        Image(systemName: "play.rectangle.fill")
-                            .font(.system(size: 52))
-                            .foregroundStyle(.tint)
-                        Text(player.mediaTitle ?? player.displayName)
-                            .font(.title3.weight(.semibold))
-                        if let artist = player.mediaArtist {
-                            Text(artist).foregroundStyle(.secondary)
-                        }
-                        Text(player.state.localizedCapitalized)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical)
-                }
-                Section("Steuerung") {
-                    HStack {
-                        mediaButton("backward.end.fill", "Vorheriger Titel") {
-                            Task { await appModel.callService(for: player, service: "media_previous_track") }
-                        }
-                        Spacer()
-                        mediaButton(player.state == "playing" ? "pause.fill" : "play.fill", "Wiedergabe") {
-                            let service = player.state == "playing" ? "media_pause" : "media_play"
-                            Task { await appModel.callService(for: player, service: service) }
-                        }
-                        Spacer()
-                        mediaButton("forward.end.fill", "Nächster Titel") {
-                            Task { await appModel.callService(for: player, service: "media_next_track") }
-                        }
-                    }
-                    .padding(.horizontal)
-                    if let volume = player.volumeLevel {
-                        VolumeControl(value: volume) { newValue in
-                            Task { await appModel.setVolume(newValue, for: player) }
-                        }
-                    }
-                    Button(player.isMuted == true ? "Ton einschalten" : "Stummschalten") {
-                        Task {
-                            await appModel.callService(
-                                for: player,
-                                service: "volume_mute",
-                                data: ["is_volume_muted": player.isMuted != true]
-                            )
-                        }
-                    }
+        ScrollView {
+            VStack(spacing: 16) {
+                if let player {
+                    IOS27MediaCard(player: player, appModel: appModel)
+                } else {
+                    EmptyFeatureView(
+                        title: "Player nicht verfügbar",
+                        symbol: "play.slash",
+                        message: "Der Player ist nicht mehr im aktuellen Home-Assistant-Zustand vorhanden."
+                    )
                 }
             }
+            .padding(16)
         }
-        .navigationTitle("Jetzt läuft")
+        .background(IOS27HomeBackground())
+        .navigationTitle(player?.displayName ?? "Jetzt läuft")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func mediaButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.title2)
-                .frame(width: 52, height: 44)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-}
-
-private struct VolumeControl: View {
-    @State private var value: Double
-    let onCommit: (Double) -> Void
-
-    init(value: Double, onCommit: @escaping (Double) -> Void) {
-        _value = State(initialValue: value)
-        self.onCommit = onCommit
-    }
-
-    var body: some View {
-        HStack {
-            Image(systemName: "speaker.fill")
-            Slider(value: $value, in: 0 ... 1) { editing in
-                if !editing { onCommit(value) }
-            }
-            Image(systemName: "speaker.wave.3.fill")
-        }
-        .accessibilityLabel("Lautstärke")
     }
 }

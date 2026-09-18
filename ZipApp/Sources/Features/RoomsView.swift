@@ -4,13 +4,17 @@ struct RoomsView: View {
     let appModel: AppModel
 
     var body: some View {
-        List {
-            Section {
-                LabeledContent("Räume", value: "\(appModel.areas.count)")
-                LabeledContent("Geräte", value: "\(appModel.devices.count)")
-            }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 10) {
+                    HomeMetricTile(title: "Räume", value: "\(appModel.areas.count)", icon: "square.grid.2x2.fill", tint: .blue)
+                    HomeMetricTile(title: "Geräte", value: "\(appModel.devices.count)", icon: "cpu.fill", tint: .indigo)
+                }
+                .padding(.horizontal, 6)
+                .ios27Surface(radius: 24)
 
-            Section("Räume") {
+                IOS27SectionHeader(title: "Räume", subtitle: "Bereiche und zugeordnete Geräte")
+
                 if appModel.areas.isEmpty {
                     EmptyFeatureView(
                         title: "Keine Räume geladen",
@@ -18,25 +22,26 @@ struct RoomsView: View {
                         message: "Home-Assistant-Areas erscheinen hier nach der Verbindung."
                     )
                 } else {
-                    ForEach(appModel.areas.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { area in
-                        NavigationLink {
-                            RoomDetailView(area: area, appModel: appModel)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Label(area.name, systemImage: "door.left.hand.open")
-                                    .font(.body.weight(.medium))
-                                Text("\(appModel.devices(inArea: area.id).count) Geräte · \(appModel.entities(inArea: area.id).count) Entitäten")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    LazyVStack(spacing: 10) {
+                        ForEach(appModel.areas.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { area in
+                            NavigationLink {
+                                RoomDetailView(area: area, appModel: appModel)
+                            } label: {
+                                IOS27StatusCard(
+                                    title: area.name,
+                                    value: "\(appModel.devices(inArea: area.id).count) Geräte · \(appModel.entities(inArea: area.id).count) Entitäten",
+                                    symbol: "door.left.hand.open",
+                                    tint: .blue,
+                                    detail: "\(appModel.entities(inArea: area.id).filter(\.isOn).count) aktiv"
+                                )
                             }
-                            .frame(minHeight: 48)
+                            .buttonStyle(IOS27PressStyle())
                         }
                     }
                 }
-            }
 
-            if !appModel.unassignedDevices.isEmpty {
-                Section("Ohne Raum") {
+                if !appModel.unassignedDevices.isEmpty {
+                    IOS27SectionHeader(title: "Ohne Raum", subtitle: "Noch nicht zugeordnet")
                     NavigationLink {
                         DeviceCollectionView(
                             title: "Geräte ohne Raum",
@@ -44,11 +49,20 @@ struct RoomsView: View {
                             appModel: appModel
                         )
                     } label: {
-                        Label("\(appModel.unassignedDevices.count) Geräte", systemImage: "square.grid.2x2")
+                        IOS27StatusCard(
+                            title: "Geräte ohne Raum",
+                            value: "\(appModel.unassignedDevices.count) Geräte",
+                            symbol: "square.grid.2x2",
+                            tint: .orange
+                        )
                     }
+                    .buttonStyle(IOS27PressStyle())
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 28)
         }
+        .background(IOS27HomeBackground())
         .navigationTitle("Räume & Geräte")
     }
 }
@@ -57,39 +71,91 @@ struct RoomDetailView: View {
     let area: HomeAssistantArea
     let appModel: AppModel
 
-    var body: some View {
-        let devices = appModel.devices(inArea: area.id)
-        let directEntities = appModel.directlyAssignedEntities(inArea: area.id)
+    private var roomEntities: [HomeAssistantEntity] { appModel.entities(inArea: area.id) }
+    private var lights: [HomeAssistantEntity] { roomEntities.filter { $0.domain == "light" || ($0.domain == "switch" && $0.displayName.localizedCaseInsensitiveContains("licht")) } }
+    private var media: [HomeAssistantEntity] { roomEntities.filter { $0.domain == "media_player" } }
+    private var otherControls: [HomeAssistantEntity] {
+        roomEntities.filter { entity in
+            !lights.contains(entity) && !media.contains(entity) && entity.controlKind != .readOnly
+        }
+    }
 
-        List {
-            Section("Geräte") {
-                if devices.isEmpty {
-                    Text("Keine Geräte direkt diesem Raum zugeordnet.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(devices) { device in
-                        NavigationLink {
-                            DeviceDetailView(device: device, appModel: appModel)
-                        } label: {
-                            DeviceRow(device: device, entityCount: appModel.entities(forDevice: device.id).count)
-                        }
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                IOS27StatusCard(
+                    title: area.name,
+                    value: "\(appModel.devices(inArea: area.id).count) Geräte · \(roomEntities.count) Entitäten",
+                    symbol: "door.left.hand.open",
+                    tint: .blue,
+                    detail: "\(roomEntities.filter(\.isOn).count) aktiv"
+                )
+
+                if !lights.isEmpty {
+                    IOS27SectionHeader(title: "Licht", subtitle: "Direkte Raumsteuerung")
+                    ForEach(lights) { entity in
+                        IOS27LightCard(entity: entity, appModel: appModel)
                     }
                 }
-            }
 
-            if !directEntities.isEmpty {
-                Section("Direkt zugeordnete Entitäten") {
-                    ForEach(directEntities) { entity in
+                if !media.isEmpty {
+                    IOS27SectionHeader(title: "Medien", subtitle: "Player und Receiver")
+                    ForEach(media) { entity in
+                        IOS27MediaCard(
+                            player: entity,
+                            appModel: appModel,
+                            volumePlayer: volumePlayer(for: entity)
+                        )
+                    }
+                }
+
+                if !otherControls.isEmpty {
+                    IOS27SectionHeader(title: "Weitere Steuerung")
+                    ForEach(otherControls) { entity in
                         NavigationLink {
                             EntityControlView(entityID: entity.entityID, appModel: appModel)
                         } label: {
-                            EntityRow(entity: entity)
+                            IOS27StatusCard(
+                                title: entity.displayName,
+                                value: entity.secondaryStateText,
+                                symbol: entity.iconName,
+                                tint: entity.isOn ? .green : .secondary
+                            )
                         }
+                        .buttonStyle(IOS27PressStyle())
                     }
                 }
+
+                let devices = appModel.devices(inArea: area.id)
+                if !devices.isEmpty {
+                    IOS27SectionHeader(title: "Geräte", subtitle: "Technische Geräteebene")
+                    VStack(spacing: 0) {
+                        ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
+                            NavigationLink {
+                                DeviceDetailView(device: device, appModel: appModel)
+                            } label: {
+                                DeviceRow(device: device, entityCount: appModel.entities(forDevice: device.id).count)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                            }
+                            .buttonStyle(.plain)
+                            if index != devices.indices.last { Divider().padding(.leading, 56) }
+                        }
+                    }
+                    .ios27Surface(radius: 24)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 28)
         }
+        .background(IOS27HomeBackground())
         .navigationTitle(area.name)
+        .navigationBarTitleDisplayMode(.large)
+    }
+
+    private func volumePlayer(for entity: HomeAssistantEntity) -> HomeAssistantEntity? {
+        guard entity.entityID == "media_player.nico_zimmer_untergeschoss_apple_tv" else { return nil }
+        return appModel.entities.first { $0.entityID == "media_player.denon_avr_x1300w" }
     }
 }
 

@@ -3,51 +3,68 @@ import SwiftUI
 struct ScenesView: View {
     let appModel: AppModel
 
+    private var scenes: [HomeAssistantEntity] { appModel.entities(inDomain: "scene") }
+    private var scripts: [HomeAssistantEntity] { appModel.entities(inDomain: "script") }
+
     var body: some View {
-        List {
-            actionSection(
-                title: "Szenen",
-                entities: appModel.entities(inDomain: "scene"),
-                emptyTitle: "Keine Szenen geladen",
-                symbol: "circle.hexagongrid"
-            ) { entity in
-                await appModel.activate(entity)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                actionGroup(title: "Szenen", subtitle: "Licht- und Raumstimmungen", entities: scenes, symbol: "circle.hexagongrid.fill", tint: .purple) { entity in
+                    await appModel.activate(entity)
+                }
+
+                actionGroup(title: "Scripts", subtitle: "Zentrale Abläufe und Master-Aktionen", entities: scripts, symbol: "scroll.fill", tint: .blue) { entity in
+                    await appModel.activateScript(entity)
+                }
             }
-            actionSection(
-                title: "Scripts",
-                entities: appModel.entities(inDomain: "script"),
-                emptyTitle: "Keine Scripts geladen",
-                symbol: "scroll"
-            ) { entity in
-                await appModel.activateScript(entity)
-            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 28)
         }
+        .background(IOS27HomeBackground())
         .navigationTitle("Szenen")
     }
 
     @ViewBuilder
-    private func actionSection(
+    private func actionGroup(
         title: String,
+        subtitle: String,
         entities: [HomeAssistantEntity],
-        emptyTitle: String,
         symbol: String,
+        tint: Color,
         action: @escaping (HomeAssistantEntity) async -> Void
     ) -> some View {
-        Section(title) {
-            if entities.isEmpty {
-                EmptyFeatureView(
-                    title: emptyTitle,
-                    symbol: symbol,
-                    message: "Home-Assistant-\(title) werden nach der Verbindung hier angezeigt."
-                )
-            } else {
+        IOS27SectionHeader(title: title, subtitle: subtitle)
+        if entities.isEmpty {
+            EmptyFeatureView(
+                title: "Keine \(title) geladen",
+                symbol: symbol,
+                message: "Home-Assistant-\(title) werden nach der Verbindung hier angezeigt."
+            )
+        } else {
+            LazyVStack(spacing: 10) {
                 ForEach(entities) { entity in
                     Button {
                         Task { await action(entity) }
                     } label: {
-                        EntityRow(entity: entity)
+                        HStack(spacing: 13) {
+                            Image(systemName: symbol)
+                                .font(.headline)
+                                .foregroundStyle(tint)
+                                .frame(width: 42, height: 42)
+                                .background(tint.opacity(0.13), in: Circle())
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(entity.displayName).font(.subheadline.weight(.semibold))
+                                Text(entity.secondaryStateText).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "play.fill")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(tint)
+                        }
+                        .padding(14)
+                        .ios27Surface(radius: 22, tint: tint)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(IOS27PressStyle())
                 }
             }
         }
