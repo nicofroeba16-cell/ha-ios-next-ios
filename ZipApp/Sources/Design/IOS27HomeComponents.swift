@@ -164,6 +164,7 @@ struct HomeMetricTile: View {
     }
 }
 
+// Adjacent glass controls share one rendering container. Add glassEffectID only when a control actually morphs between distinct glass views; static groups intentionally do not use IDs.
 struct IOS27GlassControlGroup<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: () -> Content
