@@ -51,10 +51,8 @@ final class ScreenshotUITests: XCTestCase {
         tapTab("Medien")
         capture("17-media")
 
-        tapTab("Szenen")
-        capture("18-scenes")
-
         tapTab("System")
+        captureSecondaryScenes("18-scenes")
         capture("19-system")
 
         tapTab("Zuhause")
@@ -91,10 +89,17 @@ final class ScreenshotUITests: XCTestCase {
         capture("\(prefix)-rooms")
         tapTab("Medien")
         capture("\(prefix)-media")
-        tapTab("Szenen")
-        capture("\(prefix)-scenes")
         tapTab("System")
+        captureSecondaryScenes("\(prefix)-scenes")
         capture("\(prefix)-system")
+    }
+
+    private func captureSecondaryScenes(_ name: String) {
+        let disclosure = app.buttons["Diagnose und Inventar"]
+        if disclosure.waitForExistence(timeout: 5) { disclosure.tap() }
+        tapEnsuringVisible("Szenen", maxSwipes: 4)
+        capture(name)
+        tapBack()
     }
 
     private func capture(_ name: String) {

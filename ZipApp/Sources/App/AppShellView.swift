@@ -4,7 +4,6 @@ enum AppTab: String, CaseIterable, Identifiable {
     case home
     case rooms
     case media
-    case scenes
     case system
 
     var id: String { rawValue }
@@ -14,7 +13,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .home: "Zuhause"
         case .rooms: "Räume"
         case .media: "Medien"
-        case .scenes: "Szenen"
         case .system: "System"
         }
     }
@@ -24,7 +22,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .home: "house.fill"
         case .rooms: "square.grid.2x2.fill"
         case .media: "play.tv.fill"
-        case .scenes: "circle.hexagongrid.fill"
         case .system: "gearshape.fill"
         }
     }
@@ -41,7 +38,6 @@ struct AppShellView: View {
                     Tab(AppTab.home.title, systemImage: AppTab.home.icon, value: .home) { tabNavigation { HomeView(appModel: appModel) } }
                     Tab(AppTab.rooms.title, systemImage: AppTab.rooms.icon, value: .rooms) { tabNavigation { RoomsView(appModel: appModel) } }
                     Tab(AppTab.media.title, systemImage: AppTab.media.icon, value: .media) { tabNavigation { MediaView(appModel: appModel) } }
-                    Tab(AppTab.scenes.title, systemImage: AppTab.scenes.icon, value: .scenes) { tabNavigation { ScenesView(appModel: appModel) } }
                     Tab(AppTab.system.title, systemImage: AppTab.system.icon, value: .system) { tabNavigation { SystemView(appModel: appModel) } }
                 }
             } else {
@@ -49,7 +45,6 @@ struct AppShellView: View {
                     legacyTab(.home) { HomeView(appModel: appModel) }
                     legacyTab(.rooms) { RoomsView(appModel: appModel) }
                     legacyTab(.media) { MediaView(appModel: appModel) }
-                    legacyTab(.scenes) { ScenesView(appModel: appModel) }
                     legacyTab(.system) { SystemView(appModel: appModel) }
                 }
             }

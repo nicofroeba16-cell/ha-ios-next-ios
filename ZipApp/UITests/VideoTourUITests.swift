@@ -24,11 +24,17 @@ final class VideoTourUITests: XCTestCase {
         // Full inventory remains reachable.
         tapTab("Räume"); linger(3.0)
         tapTab("Medien"); linger(3.0)
-        tapTab("Szenen"); linger(3.0)
-        tapTab("System"); linger(3.0)
+        tapTab("System"); linger(2.0)
+        openSecondaryScenes(); linger(3.0); tapBack(); linger(1.0)
 
         // Finish on the redesigned owner home.
         tapTab("Zuhause"); linger(4.0)
+    }
+
+    private func openSecondaryScenes() {
+        let disclosure = app.buttons["Diagnose und Inventar"]
+        if disclosure.waitForExistence(timeout: 5) { disclosure.tap() }
+        tapEnsuringVisible("Szenen", maxSwipes: 4)
     }
 
     private func tapTab(_ title: String) {

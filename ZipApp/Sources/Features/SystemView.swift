@@ -150,6 +150,20 @@ struct SystemView: View {
                 Divider().padding(.leading, 48)
                 diagnosticLink("Entitäten ohne Raum", "questionmark.folder.fill", appModel.unassignedEntities)
                 Divider().padding(.leading, 48)
+                NavigationLink {
+                    ScenesView(appModel: appModel)
+                } label: {
+                    HStack {
+                        Label("Szenen", systemImage: "circle.hexagongrid.fill")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.bold())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 14)
+                }
+                .buttonStyle(.plain)
+                Divider().padding(.leading, 48)
                 Button(role: .destructive) {
                     isConfirmingForgetConnection = true
                 } label: {
