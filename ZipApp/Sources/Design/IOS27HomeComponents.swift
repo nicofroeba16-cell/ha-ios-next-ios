@@ -25,25 +25,26 @@ struct IOS27Surface: ViewModifier {
     let tint: Color
     let elevated: Bool
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .background(
-                tint.opacity(0.055),
-                in: RoundedRectangle(cornerRadius: radius, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.16), .white.opacity(0.035), .clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-            .shadow(color: elevated ? tint.opacity(0.16) : .black.opacity(0.08), radius: elevated ? 24 : 12, y: elevated ? 12 : 6)
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(
+                    .regular.tint(tint),
+                    in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+                )
+                .shadow(
+                    color: elevated ? tint.opacity(0.12) : .clear,
+                    radius: elevated ? 20 : 0,
+                    y: elevated ? 10 : 0
+                )
+        } else {
+            content
+                .background(
+                    .ultraThinMaterial,
+                    in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+                )
+        }
     }
 }
 
