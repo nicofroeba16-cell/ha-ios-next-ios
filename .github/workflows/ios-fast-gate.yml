@@ -25,9 +25,13 @@ jobs:
           xcodebuild -version
           test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
           runtime_id="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(r["identifier"] for r in d["runtimes"] if r.get("isAvailable", True) and r.get("name")=="iOS 27.0"))')"
-          for name in "iPhone 18 Pro Max" "iPhone SE (3rd generation)"; do
+          names=("iPhone 18 Pro Max")
+          if [[ "${{ inputs.run_matrix }}" == "true" ]]; then
+            names+=("iPhone SE (3rd generation)")
+          fi
+          for name in "${names[@]}"; do
             if ! xcrun simctl list devices available | grep -F "$name" >/dev/null; then
-              dtype="$(DEVICE_NAME="$name" xcrun simctl list devicetypes -j | python3 -c 'import json,os,sys; d=json.load(sys.stdin); name=os.environ["DEVICE_NAME"]; print(next(x["identifier"] for x in d["devicetypes"] if x.get("name")==name))')"
+              dtype="$(xcrun simctl list devicetypes -j | DEVICE_NAME="$name" python3 -c 'import json,os,sys; d=json.load(sys.stdin); name=os.environ["DEVICE_NAME"]; print(next(x["identifier"] for x in d["devicetypes"] if x.get("name")==name))')"
               xcrun simctl create "$name" "$dtype" "$runtime_id"
             fi
           done
