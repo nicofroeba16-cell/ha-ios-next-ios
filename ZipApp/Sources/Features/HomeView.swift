@@ -9,6 +9,7 @@ struct FeaturedAreaPresentation {
 }
 
 struct HomeView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let appModel: AppModel
 
     private var nicoArea: HomeAssistantArea? { area(named: "Nico Zimmer") }
@@ -30,7 +31,7 @@ struct HomeView: View {
                     if let nicoArea { heroCard(for: nicoArea) }
 
                     sectionTitle("Häufig genutzt")
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    LazyVGrid(columns: featuredColumns, spacing: 12) {
                         ForEach(Array(featuredAreas.enumerated()), id: \.offset) { _, item in
                             if let area = area(named: item.sourceName) {
                                 NavigationLink {
@@ -104,10 +105,13 @@ struct HomeView: View {
                             .foregroundStyle(.white.opacity(0.68))
                     }
 
-                    HStack(spacing: 8) {
-                        HomeStatusChip(text: "\(activeCount(in: area, domain: "light")) Licht", symbol: "lightbulb.fill")
-                        HomeStatusChip(text: "\(activeCount(in: area, domain: "media_player")) Medien", symbol: "play.tv.fill")
-                        HomeStatusChip(text: "\(appModel.devices(inArea: area.id).count) Geräte", symbol: "cpu")
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            heroStatusChips(for: area)
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            heroStatusChips(for: area)
+                        }
                     }
                 }
                 .foregroundStyle(.white)
@@ -181,6 +185,17 @@ struct HomeView: View {
         Rectangle()
             .fill(Color.primary.opacity(0.08))
             .frame(width: 0.5, height: 44)
+    }
+
+    @ViewBuilder
+    private func heroStatusChips(for area: HomeAssistantArea) -> some View {
+        HomeStatusChip(text: "\(activeCount(in: area, domain: "light")) Licht", symbol: "lightbulb.fill")
+        HomeStatusChip(text: "\(activeCount(in: area, domain: "media_player")) Medien", symbol: "play.tv.fill")
+        HomeStatusChip(text: "\(appModel.devices(inArea: area.id).count) Geräte", symbol: "cpu")
+    }
+
+    private var featuredColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.flexible()), GridItem(.flexible())]
     }
 
     private func area(named name: String) -> HomeAssistantArea? {

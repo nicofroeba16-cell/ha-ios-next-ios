@@ -66,6 +66,7 @@ struct IOS27LightCard: View {
 }
 
 struct IOS27MediaCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let player: HomeAssistantEntity
     let appModel: AppModel
     var volumePlayer: HomeAssistantEntity? = nil
@@ -85,7 +86,7 @@ struct IOS27MediaCard: View {
                     Text(player.mediaTitle ?? player.state.localizedCapitalized)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 }
                 Spacer()
                 Text(player.state.localizedCapitalized)
@@ -144,6 +145,7 @@ struct IOS27MediaCard: View {
 
 struct IOS27StatusCard: View {
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let title: String
     let value: String
@@ -152,7 +154,8 @@ struct IOS27StatusCard: View {
     var detail: String? = nil
 
     var body: some View {
-        HStack(spacing: 13) {
+        let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 13))
+        layout {
             Image(systemName: symbol)
                 .font(.headline)
                 .foregroundStyle(tint)
@@ -163,7 +166,7 @@ struct IOS27StatusCard: View {
                 Text(value).font(.caption).foregroundStyle(.secondary)
                 if let detail { Text(detail).font(.caption2).foregroundStyle(colorSchemeContrast == .increased ? .secondary : .tertiary) }
             }
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
         }
         .padding(14)
         .ios27ContentSurface(radius: 20)
@@ -172,6 +175,7 @@ struct IOS27StatusCard: View {
 
 struct IOS27MediaZoneCard: View {
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let title: String
     let subtitle: String
@@ -182,12 +186,13 @@ struct IOS27MediaZoneCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
+            let headerLayout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
+            headerLayout {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.title3.weight(.bold))
                     Text(subtitle).font(.caption).foregroundStyle(.secondary)
                 }
-                Spacer()
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                 if let masterState {
                     Label(masterState.isOn ? "Aktiv" : "Bereit", systemImage: masterState.isOn ? "dot.radiowaves.left.and.right" : "moon.fill")
                         .font(.caption2.weight(.semibold))
@@ -196,7 +201,8 @@ struct IOS27MediaZoneCard: View {
             }
 
             ForEach(players) { player in
-                HStack(spacing: 11) {
+                let playerLayout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 11))
+                playerLayout {
                     Image(systemName: player.iconName)
                         .foregroundStyle(player.state == "playing" ? .blue : .secondary)
                         .frame(width: 34, height: 34)
@@ -204,9 +210,9 @@ struct IOS27MediaZoneCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(player.displayName).font(.subheadline.weight(.semibold))
                         Text(player.mediaTitle ?? player.state.localizedCapitalized)
-                            .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            .font(.caption2).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                     }
-                    Spacer()
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                     Text(player.state.localizedCapitalized)
                         .font(.caption2)
                         .foregroundStyle(colorSchemeContrast == .increased ? .secondary : .tertiary)
@@ -232,12 +238,14 @@ struct IOS27MediaZoneCard: View {
 }
 
 struct IOS27FireTVCompanionCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let player: HomeAssistantEntity
     let appModel: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 17) {
-            HStack(spacing: 13) {
+            let headerLayout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 13))
+            headerLayout {
                 Image(systemName: "tv.fill")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.orange)
@@ -246,9 +254,9 @@ struct IOS27FireTVCompanionCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.displayName).font(.title3.weight(.bold))
                     Text(player.mediaTitle ?? player.state.localizedCapitalized)
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 }
-                Spacer()
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                 Circle()
                     .fill(player.isAvailable ? (player.isOn ? Color.green : Color.secondary) : Color.red)
                     .frame(width: 8, height: 8)
@@ -272,11 +280,13 @@ struct IOS27FireTVCompanionCard: View {
                 .frame(maxWidth: .infinity)
             }
 
-            HStack(spacing: 8) {
-                capabilityChip("Player", "play.fill")
-                capabilityChip("Apps", "square.grid.2x2.fill")
-                capabilityChip("Remote", "remote.fill")
-                capabilityChip("Queue", "list.bullet")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    capabilityChips
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    capabilityChips
+                }
             }
 
             if let volume = player.volumeLevel {
@@ -308,6 +318,14 @@ struct IOS27FireTVCompanionCard: View {
         .ios27GlassButton(prominent: prominent)
         .tint(.orange)
         .accessibilityLabel(label)
+    }
+
+    @ViewBuilder
+    private var capabilityChips: some View {
+        capabilityChip("Player", "play.fill")
+        capabilityChip("Apps", "square.grid.2x2.fill")
+        capabilityChip("Remote", "remote.fill")
+        capabilityChip("Queue", "list.bullet")
     }
 
     private func capabilityChip(_ text: String, _ symbol: String) -> some View {
