@@ -264,7 +264,8 @@ run_variant() {
   done
 }
 
-# shellcheck disable=SC2329 # invoked by EXIT trap
+# cleanup is invoked indirectly by the EXIT trap.
+# shellcheck disable=SC2329,SC2317
 cleanup() {
   set +e
   for device_id in "$iphone_id" "$ipad_id"; do
