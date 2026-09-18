@@ -21,13 +21,21 @@ struct IOS27HomeBackground: View {
 }
 
 struct IOS27Surface: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     let radius: CGFloat
     let tint: Color
     let elevated: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        if reduceTransparency {
+            content
+                .background(
+                    Color(.secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+                )
+        } else if #available(iOS 26.0, *) {
             content
                 .glassEffect(
                     .regular.tint(tint),
@@ -143,11 +151,13 @@ struct HomeMetricTile: View {
 }
 
 struct IOS27PressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.985 : 1))
             .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 

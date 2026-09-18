@@ -141,6 +141,8 @@ struct IOS27MediaCard: View {
 }
 
 struct IOS27StatusCard: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     let title: String
     let value: String
     let symbol: String
@@ -157,7 +159,7 @@ struct IOS27StatusCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(value).font(.caption).foregroundStyle(.secondary)
-                if let detail { Text(detail).font(.caption2).foregroundStyle(.tertiary) }
+                if let detail { Text(detail).font(.caption2).foregroundStyle(colorSchemeContrast == .increased ? .secondary : .tertiary) }
             }
             Spacer()
         }
@@ -167,6 +169,8 @@ struct IOS27StatusCard: View {
 }
 
 struct IOS27MediaZoneCard: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     let title: String
     let subtitle: String
     let players: [HomeAssistantEntity]
@@ -202,7 +206,8 @@ struct IOS27MediaZoneCard: View {
                     }
                     Spacer()
                     Text(player.state.localizedCapitalized)
-                        .font(.caption2).foregroundStyle(.tertiary)
+                        .font(.caption2)
+                        .foregroundStyle(colorSchemeContrast == .increased ? .secondary : .tertiary)
                 }
             }
 
