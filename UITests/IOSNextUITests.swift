@@ -375,3 +375,292 @@ final class IOSNextUITests: XCTestCase {
         captureAllProductScreens(prefix: "ipad-landscape-light", dark: false, orientation: .landscapeLeft)
     }
 }
+
+
+extension IOSNextUITests {
+    private var phase2ScenarioID: String {
+        ProcessInfo.processInfo.environment["IOSNEXT_PHASE2_SCENARIO_ID"] ?? ""
+    }
+
+    private var phase2Appearance: String {
+        ProcessInfo.processInfo.environment["IOSNEXT_PHASE2_APPEARANCE"] ?? "light"
+    }
+
+    private var phase2Orientation: String {
+        ProcessInfo.processInfo.environment["IOSNEXT_PHASE2_ORIENTATION"] ?? "portrait"
+    }
+
+    private func phase2PrepareOrientationBeforeLaunch() {
+        XCUIDevice.shared.orientation = phase2Orientation == "landscape" ? .landscapeLeft : .portrait
+        RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+    }
+
+    private func phase2SettleOrientation(in application: XCUIApplication) {
+        setOrientation(phase2Orientation == "landscape" ? .landscapeLeft : .portrait, in: application)
+    }
+
+    private func phase2Product(_ screen: String) -> XCUIApplication {
+        phase2PrepareOrientationBeforeLaunch()
+        let arguments = phase2Appearance == "dark" ? ["--product-ui-test-dark"] : []
+        let application = launch(screen, extraArguments: arguments)
+        phase2SettleOrientation(in: application)
+        return application
+    }
+
+    private func phase2WaitReady(
+        identifier: String,
+        in application: XCUIApplication,
+        timeout: TimeInterval = 10
+    ) {
+        let probe = application.descendants(matching: .any)
+            .matching(identifier: identifier)
+            .firstMatch
+        XCTAssertTrue(
+            probe.waitForExistence(timeout: timeout),
+            "PHASE2_CLASS=ready_timeout probe missing: \(identifier)"
+        )
+        let predicate = NSPredicate(format: "value == %@", "ready")
+        let result = XCTWaiter.wait(
+            for: [XCTNSPredicateExpectation(predicate: predicate, object: probe)],
+            timeout: timeout
+        )
+        XCTAssertEqual(result, .completed, "PHASE2_CLASS=ready_timeout probe not ready: \(identifier)")
+    }
+
+    private func phase2Launch(arguments: [String]) -> XCUIApplication {
+        phase2PrepareOrientationBeforeLaunch()
+        let application = XCUIApplication()
+        application.launchArguments = arguments
+        application.launch()
+        phase2SettleOrientation(in: application)
+        app = application
+        return application
+    }
+
+    private func phase2Screenshot(_ suffix: String, application: XCUIApplication) {
+        attachScreenshot(
+            "PHASE2-\(phase2ScenarioID)-\(phase2Appearance)-\(phase2Orientation)-\(suffix)",
+            app: application
+        )
+    }
+
+    private func phase2TapLabel(_ label: String, application: XCUIApplication) {
+        let exact = application.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", label))
+            .firstMatch
+        if exact.waitForExistence(timeout: 2) {
+            tapWhenVisible(exact, in: application, label: label)
+            return
+        }
+        let contains = application.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", label))
+            .firstMatch
+        tapWhenVisible(contains, in: application, label: label)
+    }
+
+    private func phase2AssertVisibleText(
+        _ text: String,
+        application: XCUIApplication,
+        timeout: TimeInterval = 5
+    ) {
+        let element = application.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", text))
+            .firstMatch
+        XCTAssertTrue(
+            element.waitForExistence(timeout: timeout),
+            "PHASE2_CLASS=wrong_surface expected text missing: \(text)"
+        )
+    }
+
+    private func phase2AccessibilityState(screen: String, application: XCUIApplication) -> String {
+        let root = application.descendants(matching: .any)
+            .matching(identifier: "product-acceptance-\(screen)")
+            .firstMatch
+        XCTAssertTrue(root.waitForExistence(timeout: 5), "PHASE2_CLASS=wrong_surface missing root \(screen)")
+        return root.value as? String ?? ""
+    }
+
+    private func phase2RunNavigation(_ scenario: String) {
+        let spec: (screen: String, tap: String, verify: String)
+        switch scenario {
+        case "NAV-001": spec = ("rooms", "Timo Zimmer", "Nur verifizierte Geräte")
+        case "NAV-002": spec = ("rooms", "Alle Entitäten", "Name oder Entity-ID")
+        case "NAV-003": spec = ("media", "Companion Testfilm", "10 Sekunden vor")
+        case "NAV-004": spec = ("system", "Fernzugriff · WireGuard", "iOS Next WireGuard")
+        case "NAV-005": spec = ("system", "Szenen", "Abend")
+        case "NAV-006": spec = ("system", "Runner", "Runner nicht eingerichtet")
+        case "NAV-007": spec = ("system", "Diagnose", "Tokens werden nie in der Diagnose angezeigt")
+        default:
+            XCTFail("PHASE2_CLASS=selector_contract unknown navigation scenario: \(scenario)")
+            return
+        }
+
+        let application = phase2Product(spec.screen)
+        phase2TapLabel(spec.tap, application: application)
+        phase2AssertVisibleText(spec.verify, application: application)
+        phase2Screenshot("terminal", application: application)
+    }
+
+    private func phase2RunAccessibility(_ scenario: String) {
+        let spec: (token: String, targets: [String])
+        switch scenario {
+        case "A11Y-001": spec = ("dynamicTypeAccessibility=true", ["home", "chat", "system", "light"])
+        case "A11Y-002": spec = ("reduceMotion=true", ["home", "chat", "media", "light"])
+        case "A11Y-003": spec = ("reduceTransparency=true", ["home", "system", "owner", "wireguard"])
+        case "A11Y-004": spec = ("increasedContrast=true", ["home", "rooms", "media", "system", "light"])
+        default:
+            XCTFail("PHASE2_CLASS=selector_contract unknown accessibility scenario: \(scenario)")
+            return
+        }
+
+        for target in spec.targets {
+            let application = phase2Product(target)
+            let state = phase2AccessibilityState(screen: target, application: application)
+            XCTAssertTrue(
+                state.contains(spec.token),
+                "PHASE2_CLASS=accessibility_state_mismatch \(scenario) target=\(target) state=\(state)"
+            )
+            phase2Screenshot(target, application: application)
+        }
+    }
+
+    private func phase2RunOrientation() {
+        let targets = ["home", "rooms", "media", "system"]
+        for target in targets {
+            let application = phase2Product(target)
+            phase2Screenshot(target, application: application)
+        }
+    }
+
+    private func phase2RunCard(_ scenario: String) {
+        let page: Int
+        switch scenario {
+        case "CARD-001": page = 0
+        case "CARD-002": page = 1
+        case "CARD-003": page = 2
+        default:
+            XCTFail("PHASE2_CLASS=selector_contract unknown card scenario: \(scenario)")
+            return
+        }
+        let application = phase2Launch(arguments: ["--live-card-test-mode", "--live-card-page=\(page)"])
+        phase2WaitReady(identifier: "visual-ready-live-card-page-\(page)", in: application)
+        phase2AssertVisibleText("Testmodus · Seite \(page + 1)/3", application: application)
+        phase2Screenshot("page-\(page)", application: application)
+    }
+
+    private func phase2RunAnimation(_ scenario: String) {
+        if scenario == "ANIM-009" {
+            let application = phase2Launch(arguments: ["--animation-acceptance-mode"])
+            phase2WaitReady(identifier: "visual-ready-animation-stage-7", in: application, timeout: 24)
+            phase2AssertVisibleText("Owner Area", application: application, timeout: 24)
+            phase2Screenshot("sequence-terminal", application: application)
+            return
+        }
+
+        guard let suffix = Int(scenario.split(separator: "-").last ?? ""), (1...8).contains(suffix) else {
+            XCTFail("PHASE2_CLASS=selector_contract unknown animation scenario: \(scenario)")
+            return
+        }
+        let stage = suffix - 1
+        let application = phase2Launch(arguments: [
+            "--animation-acceptance-mode",
+            "--animation-stage=\(stage)"
+        ])
+        phase2WaitReady(identifier: "visual-ready-animation-stage-\(stage)", in: application)
+        phase2Screenshot("stage-\(stage)", application: application)
+    }
+
+    private func phase2RunColdLaunch() {
+        let application = phase2Launch(arguments: [])
+        phase2AssertVisibleText("iOS Next", application: application, timeout: 8)
+        XCTAssertTrue(
+            application.buttons["Home Assistant verbinden"].waitForExistence(timeout: 5),
+            "PHASE2_CLASS=wrong_surface connection action missing"
+        )
+        XCTAssertTrue(
+            application.buttons["Verschlüsselten Chat öffnen"].waitForExistence(timeout: 5),
+            "PHASE2_CLASS=wrong_surface chat action missing"
+        )
+        phase2Screenshot("landing", application: application)
+    }
+
+    private func phase2RunSetup() {
+        let application = phase2Launch(arguments: [])
+        let connect = application.buttons["Home Assistant verbinden"]
+        tapWhenVisible(connect, in: application, label: "Home Assistant verbinden")
+        XCTAssertTrue(
+            application.navigationBars["Verbinden"].waitForExistence(timeout: 5),
+            "PHASE2_CLASS=wrong_surface connection setup sheet missing"
+        )
+        phase2AssertVisibleText("Home-Assistant-Adresse", application: application)
+        phase2Screenshot("setup", application: application)
+    }
+
+    private func phase2RunRunnerSafeState() {
+        let application = phase2Product("system")
+        phase2TapLabel("Runner", application: application)
+        phase2AssertVisibleText("Runner nicht eingerichtet", application: application)
+        phase2Screenshot("not-configured", application: application)
+    }
+
+    private func phase2RunChatInteraction() {
+        let application = phase2Product("chat")
+        let field = application.textFields["chat-composer-field"].firstMatch
+        tapWhenVisible(field, in: application, label: "Chat composer")
+        application.typeText("Phase2 Visual")
+        XCTAssertEqual(
+            field.value as? String,
+            "Phase2 Visual",
+            "PHASE2_CLASS=wrong_surface chat draft did not update"
+        )
+        phase2Screenshot("draft", application: application)
+    }
+
+    private func phase2RunLightInteraction() {
+        let application = phase2Product("light")
+        let brightness = application.sliders["light-brightness-slider"]
+        scrollUpUntilHittable(brightness, in: application, label: "Brightness slider")
+        let before = brightness.value as? String
+        brightness.adjust(toNormalizedSliderPosition: 0.28)
+        XCTAssertNotEqual(before, brightness.value as? String, "PHASE2_CLASS=wrong_surface slider did not change")
+        phase2Screenshot("slider", application: application)
+    }
+
+    func testPhase2Scenario() {
+        let scenario = phase2ScenarioID
+        XCTAssertFalse(scenario.isEmpty, "PHASE2_CLASS=selector_contract missing scenario id")
+
+        switch scenario {
+        case "CLD-001":
+            phase2RunColdLaunch()
+        case "SETUP-001":
+            phase2RunSetup()
+        case "SHELL-001": phase2Screenshot("home", application: phase2Product("home"))
+        case "SHELL-002": phase2Screenshot("rooms", application: phase2Product("rooms"))
+        case "SHELL-003": phase2Screenshot("chat", application: phase2Product("chat"))
+        case "SHELL-004": phase2Screenshot("media", application: phase2Product("media"))
+        case "SHELL-005": phase2Screenshot("system", application: phase2Product("system"))
+        case "NAV-001"..."NAV-007":
+            phase2RunNavigation(scenario)
+        case "DETAIL-001": phase2Screenshot("light", application: phase2Product("light"))
+        case "DETAIL-002": phase2Screenshot("media-detail", application: phase2Product("media-detail"))
+        case "OWNER-001":
+            let application = phase2Product("owner")
+            phase2AssertVisibleText("Owner-Zugang nicht eingerichtet", application: application)
+            phase2Screenshot("not-configured", application: application)
+        case "WG-001":
+            let application = phase2Product("wireguard")
+            phase2AssertVisibleText("iOS Next WireGuard", application: application)
+            phase2Screenshot("not-configured", application: application)
+        case "RUNNER-001": phase2RunRunnerSafeState()
+        case "CHAT-INT-001": phase2RunChatInteraction()
+        case "LIGHT-INT-001": phase2RunLightInteraction()
+        case "A11Y-001"..."A11Y-004": phase2RunAccessibility(scenario)
+        case "CARD-001"..."CARD-003": phase2RunCard(scenario)
+        case "ANIM-001"..."ANIM-009": phase2RunAnimation(scenario)
+        case "ORIENT-001": phase2RunOrientation()
+        default:
+            XCTFail("PHASE2_CLASS=selector_contract unsupported scenario: \(scenario)")
+        }
+    }
+}

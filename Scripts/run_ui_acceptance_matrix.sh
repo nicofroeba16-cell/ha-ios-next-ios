@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+if [ -f UITests/VisualAcceptanceMatrix.json ]; then
+  exec bash Scripts/run_phase2_visual_acceptance.sh
+fi
+
 PROJECT="IOSNext.xcodeproj"
 SCHEME="IOSNext"
 IPHONE_NAME="${IPHONE_NAME:-${DEVICE_NAME:-iPhone 18 Pro Max}}"

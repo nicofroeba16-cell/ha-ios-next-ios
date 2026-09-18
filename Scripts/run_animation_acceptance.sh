@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+if [ -f CIEvidence/phase2-visual-acceptance-manifest.json ]; then
+  exec python3 Scripts/phase2_results.py --manifest CIEvidence/phase2-visual-acceptance-manifest.json gate --categories animation-stage,animation-sequence
+fi
+
 DEVICE_NAME="${DEVICE_NAME:-iPhone 17 Pro}"
 APP_ID="de.nicofroeba16.iosnext"
 OUT_DIR="${OUT_DIR:-AnimationAcceptance}"

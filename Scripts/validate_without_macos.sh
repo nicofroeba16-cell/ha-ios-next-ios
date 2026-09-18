@@ -38,7 +38,21 @@ if [[ -n "$credential_matches" ]]; then
   exit 1
 fi
 
+bash -n \
+  Scripts/run_phase2_visual_acceptance.sh \
+  Scripts/run_ui_acceptance_matrix.sh \
+  Scripts/capture_live_card_screenshots.sh \
+  Scripts/run_dark_visual_acceptance.sh \
+  Scripts/run_animation_acceptance.sh
+python3 -m py_compile Scripts/phase2_results.py Scripts/validate_visual_acceptance_matrix.py Scripts/validate_phase2_execution_support.py
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck Scripts/run_phase2_visual_acceptance.sh Scripts/run_ui_acceptance_matrix.sh \
+    Scripts/capture_live_card_screenshots.sh Scripts/run_dark_visual_acceptance.sh Scripts/run_animation_acceptance.sh
+fi
+grep -q 'func testPhase2Scenario()' UITests/IOSNextUITests.swift
+
 python3 Scripts/validate_visual_acceptance_matrix.py
+python3 Scripts/validate_phase2_execution_support.py
 
 PYTHONPATH=Backend python3 -m unittest discover -s Backend/tests >/dev/null
 
