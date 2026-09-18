@@ -35,7 +35,6 @@ targets:
       - Tests
     dependencies:
       - target: IOSNext
-
   IOSNextUITests:
     type: bundle.ui-testing
     platform: iOS

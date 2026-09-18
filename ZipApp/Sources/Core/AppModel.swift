@@ -263,6 +263,32 @@ final class AppModel {
         entities.filter { $0.domain == domain }
     }
 
+    func devices(inArea areaID: String) -> [HomeAssistantDevice] {
+        devices
+            .filter { $0.areaID == areaID }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    var unassignedDevices: [HomeAssistantDevice] {
+        devices
+            .filter { $0.areaID == nil }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    func entities(forDevice deviceID: String) -> [HomeAssistantEntity] {
+        let entityIDs = Set(entityRegistry.filter { $0.deviceID == deviceID }.map(\.entityID))
+        return entities
+            .filter { entityIDs.contains($0.entityID) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    func directlyAssignedEntities(inArea areaID: String) -> [HomeAssistantEntity] {
+        let entityIDs = Set(entityRegistry.filter { $0.areaID == areaID }.map(\.entityID))
+        return entities
+            .filter { entityIDs.contains($0.entityID) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
     func entities(inArea areaID: String) -> [HomeAssistantEntity] {
         let ids = Set(entityRegistry.filter { $0.areaID == areaID }.map(\.entityID))
         let deviceIDs = Set(devices.filter { $0.areaID == areaID }.map(\.id))

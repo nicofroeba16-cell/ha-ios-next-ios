@@ -23,7 +23,7 @@ jobs:
             dtype="$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["identifier"] for x in d["devicetypes"] if x.get("name")=="iPhone 18 Pro Max"))')"
             xcrun simctl create "iPhone 18 Pro Max" "$dtype" "$runtime_id"
           fi
-      - name: Ensure XcodeGen
+      - name: Ensure tools
         run: |
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
@@ -34,31 +34,41 @@ jobs:
         working-directory: ZipApp
         run: |
           set -euo pipefail
+          DERIVED="$RUNNER_TEMP/iosnext-video-derived"
+          rm -rf "$DERIVED"
           xcodebuild build-for-testing -project IOSNext.xcodeproj -scheme IOSNext \
+            -derivedDataPath "$DERIVED" \
             -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
             CODE_SIGNING_ALLOWED=NO
-      - name: Record full UI tour
+      - name: Record visible app tour
         working-directory: ZipApp
         run: |
           set -euo pipefail
+          DERIVED="$RUNNER_TEMP/iosnext-video-derived"
           udid="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[x for k,v in d["devices"].items() if k.endswith("iOS-27-0") for x in v if x.get("isAvailable",True) and x["name"]=="iPhone 18 Pro Max"]; assert m; print(m[0]["udid"])')"
           xcrun simctl shutdown "$udid" 2>/dev/null || true
           xcrun simctl erase "$udid"
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid" -b
-          video="$GITHUB_WORKSPACE/IOSNext-Xcode-Test-All-Pages.mp4"
-          xcrun simctl io "$udid" recordVideo --codec=h264 "$video" >"$RUNNER_TEMP/record-video.log" 2>&1 &
+          app_path="$DERIVED/Build/Products/Debug-iphonesimulator/IOSNext.app"
+          test -d "$app_path"
+          xcrun simctl install "$udid" "$app_path"
+          xcrun simctl launch "$udid" de.nicofroeba16.iosnext --video-demo
+          sleep 3
+          raw="$GITHUB_WORKSPACE/IOSNext-Xcode-Test-All-Pages.mp4"
+          xcrun simctl io "$udid" recordVideo --codec=h264 "$raw" >"$RUNNER_TEMP/record-video.log" 2>&1 &
           recorder=$!
           finish() { kill -INT "$recorder" 2>/dev/null || true; wait "$recorder" 2>/dev/null || true; }
           trap finish EXIT
-          xcodebuild test -project IOSNext.xcodeproj -scheme IOSNext \
+          xcodebuild test-without-building -project IOSNext.xcodeproj -scheme IOSNext \
+            -derivedDataPath "$DERIVED" \
             -destination "platform=iOS Simulator,id=$udid" \
-            -only-testing:IOSNextUITests/VideoTourUITests/testRecordAllPages \
+            -only-testing:IOSNextUITests/VideoTourUITests/testRecordAllViews \
             CODE_SIGNING_ALLOWED=NO
           finish
           trap - EXIT
-          test -s "$video"
-          ls -lh "$video"
+          test -s "$raw"
+          ls -lh "$raw"
       - name: Upload video only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

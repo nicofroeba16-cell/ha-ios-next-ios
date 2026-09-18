@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 @main
@@ -6,13 +7,15 @@ struct IOSNextApp: App {
 
     init() {
         if ProcessInfo.processInfo.arguments.contains("--video-demo") {
-            _appModel = State(initialValue: .preview)
+            _appModel = State(initialValue: AppModel.preview)
         } else {
             _appModel = State(initialValue: AppModel())
         }
     }
 
     var body: some Scene {
-        WindowGroup { AppRootView(appModel: appModel) }
+        WindowGroup {
+            AppRootView(appModel: appModel)
+        }
     }
 }

@@ -163,6 +163,38 @@ final class IOSNextTests: XCTestCase {
         XCTAssertEqual(player.secondaryStateText, "Track")
     }
 
+
+    func testAreaRegistryDecoding() {
+        let area = HomeAssistantArea(dictionary: [
+            "area_id": "nico_zimmer_untergeschoss",
+            "name": "Nico Zimmer"
+        ])
+        XCTAssertEqual(area?.id, "nico_zimmer_untergeschoss")
+        XCTAssertEqual(area?.name, "Nico Zimmer")
+    }
+
+    func testDeviceRegistryPrefersUserName() {
+        let device = HomeAssistantDevice(dictionary: [
+            "id": "device-1",
+            "name": "Original",
+            "name_by_user": "Wohnzimmer TV",
+            "area_id": "wohnzimmer"
+        ])
+        XCTAssertEqual(device?.name, "Wohnzimmer TV")
+        XCTAssertEqual(device?.areaID, "wohnzimmer")
+    }
+
+    func testEntityRegistryPreservesDeviceAndAreaLinks() {
+        let registry = HomeAssistantRegistryEntity(dictionary: [
+            "entity_id": "light.test",
+            "device_id": "device-1",
+            "area_id": "wohnzimmer"
+        ])
+        XCTAssertEqual(registry?.entityID, "light.test")
+        XCTAssertEqual(registry?.deviceID, "device-1")
+        XCTAssertEqual(registry?.areaID, "wohnzimmer")
+    }
+
     func testProductionOAuthClientIDUsesPublishedPage() {
         XCTAssertEqual(
             HomeAssistantOAuthConfiguration.productionClientID.absoluteString,
