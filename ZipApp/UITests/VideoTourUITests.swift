@@ -9,55 +9,71 @@ final class VideoTourUITests: XCTestCase {
     }
 
     func testRecordAllViews() throws {
+        // Zuhause: Live-HA fixture overview
         linger(2.0)
-        openAndBack("Hintergrund Fernseher", linger: 2.0)
 
+        // Räume: use a real area from the live registry, no demo entity names.
         tapTab("Räume"); linger(2.0)
-        tap("Timo Zimmer"); linger(2.0)
-        tap("Licht"); linger(2.0)
-        openAndBack("Hintergrund Fernseher", linger: 2.0)
-        tapBack(); linger(1.0)
-        tapBack(); linger(1.0)
+        openAndBack("Timo Zimmer", linger: 3.0)
 
-        tapTab("Medien"); linger(2.0)
-        openAndBack("Schlafzimmer", linger: 3.0)
-
+        // Media/scenes overview from the complete fixture.
+        tapTab("Medien"); linger(3.0)
         tapTab("Szenen"); linger(3.0)
+
+        // System inventory views ensure all live entities remain reachable.
         tapTab("System"); linger(2.0)
-        tap("Verbindung verwalten"); linger(3.0)
-        closeSetup(); linger(1.5)
-        tap("Verbindung entfernen"); linger(3.0)
-        tap("Home Assistant verbinden"); linger(3.0)
+        openSystemInventory("Alle Entitäten")
+        openSystemInventory("Aktionen & Dienste")
+        openSystemInventory("Entitäten ohne Raum")
+
+        // Connection sheet is another app view, but do not disconnect fixture data.
+        tapEnsuringVisible("Verbindung verwalten")
+        linger(3.0)
         closeSetup(); linger(2.0)
     }
 
     private func tapTab(_ title: String) {
-        let b = app.tabBars.buttons[title]
-        XCTAssertTrue(b.waitForExistence(timeout: 5), "Missing tab: \(title)")
-        b.tap()
+        let button = app.tabBars.buttons[title]
+        XCTAssertTrue(button.waitForExistence(timeout: 8), "Missing tab: \(title)")
+        button.tap()
     }
 
     private func tap(_ label: String) {
-        let b = app.buttons[label]
-        if b.waitForExistence(timeout: 2) { b.tap(); return }
-        let t = app.staticTexts[label]
-        XCTAssertTrue(t.waitForExistence(timeout: 5), "Missing UI element: \(label)")
-        t.tap()
+        let button = app.buttons[label]
+        if button.waitForExistence(timeout: 2) { button.tap(); return }
+        let text = app.staticTexts[label]
+        XCTAssertTrue(text.waitForExistence(timeout: 5), "Missing UI element: \(label)")
+        text.tap()
+    }
+
+    private func tapEnsuringVisible(_ label: String) {
+        for _ in 0..<6 {
+            let button = app.buttons[label]
+            if button.exists && button.isHittable { button.tap(); return }
+            let text = app.staticTexts[label]
+            if text.exists && text.isHittable { text.tap(); return }
+            app.swipeUp()
+        }
+        XCTFail("Missing/hittable UI element: \(label)")
     }
 
     private func openAndBack(_ label: String, linger duration: TimeInterval) {
         tap(label); linger(duration); tapBack(); linger(1.0)
     }
 
+    private func openSystemInventory(_ label: String) {
+        tapEnsuringVisible(label); linger(3.0); tapBack(); linger(1.0)
+    }
+
     private func tapBack() {
-        let b = app.navigationBars.buttons.element(boundBy: 0)
-        XCTAssertTrue(b.waitForExistence(timeout: 5), "Missing back button")
-        b.tap()
+        let button = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing back button")
+        button.tap()
     }
 
     private func closeSetup() {
-        let b = app.buttons["Abbrechen"]
-        if b.waitForExistence(timeout: 3) { b.tap() }
+        let button = app.buttons["Abbrechen"]
+        if button.waitForExistence(timeout: 3) { button.tap() }
     }
 
     private func linger(_ seconds: TimeInterval) {
