@@ -38,7 +38,7 @@ struct EntityRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .frame(width: 28, height: 28)
-                .foregroundStyle(entity.isOn ? Color.accentColor : .secondary)
+                .foregroundStyle(entity.isOn ? Color.accentColor : Color.secondary)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entity.displayName)

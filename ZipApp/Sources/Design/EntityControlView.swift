@@ -70,8 +70,8 @@ struct EntityControlView: View {
                     LabeledContent("Aktuell", value: String(format: "%.1f °C", current))
                 }
                 if let target = entity.targetTemperature {
-                    TemperatureControl(value: target) {
-                        Task { await appModel.setTemperature($0, for: entity) }
+                    TemperatureControl(value: target) { newValue in
+                        Task { await appModel.setTemperature(newValue, for: entity) }
                     }
                 }
             }
