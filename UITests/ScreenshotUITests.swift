@@ -1,0 +1,135 @@
+import XCTest
+
+final class ScreenshotUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    func testCaptureAllViews() throws {
+        launch(arguments: ["--qa-dark"])
+        XCTAssertTrue(app.staticTexts["Nico"].waitForExistence(timeout: 8))
+        capture("01-home")
+
+        for (label, name) in [
+            ("Nico-Zimmer", "02-room-nico"),
+            ("Timo-Zimmer", "03-room-timo"),
+            ("Hütte", "04-room-huette"),
+            ("Außenbereich", "05-room-aussen"),
+            ("Wohnzimmer", "06-room-wohnzimmer")
+        ] {
+            tapEnsuringVisible(label, maxSwipes: 5)
+            capture(name)
+            if label == "Nico-Zimmer" {
+                app.swipeUp()
+                capture("02b-room-nico-controls")
+            } else if label == "Hütte" {
+                app.swipeUp()
+                capture("04b-room-huette-lighting")
+            }
+            tapBack()
+        }
+
+        tapTab("Räume")
+        capture("07-rooms-overview")
+
+        for (label, name) in [
+            ("Arbeitszimmer", "08-room-arbeitszimmer"),
+            ("Dienst", "10-room-dienst"),
+            ("Flur", "11-room-flur"),
+            ("Handys", "12-room-handys"),
+            ("Juli Zimmer", "13-room-juli"),
+            ("Mika Zimmer", "14-room-mika"),
+            ("Rasen", "15-room-rasen")
+        ] {
+            tapEnsuringVisible(label, maxSwipes: 12)
+            capture(name)
+            tapBack()
+        }
+
+        tapTab("Medien")
+        capture("17-media")
+
+        tapTab("System")
+        captureSecondaryScenes("18-scenes")
+        capture("19-system")
+
+        tapTab("Zuhause")
+        capture("20-home-final")
+    }
+
+
+    func testCaptureVisualMatrix() throws {
+        let variants: [(String, [String])] = [
+            ("dark", ["--qa-dark"]),
+            ("light", ["--qa-light"]),
+            ("contrast", ["--qa-dark", "--qa-increased-contrast"]),
+            ("reduced-transparency", ["--qa-dark", "--qa-reduce-transparency"]),
+            ("accessibility-text", ["--qa-dark", "--qa-accessibility-text"])
+        ]
+
+        for (name, arguments) in variants {
+            launch(arguments: arguments)
+            captureCoreViews(prefix: name)
+            app.terminate()
+        }
+    }
+
+    private func launch(arguments: [String]) {
+        app = XCUIApplication()
+        app.launchArguments = ["--video-demo"] + arguments
+        app.launch()
+    }
+
+    private func captureCoreViews(prefix: String) {
+        XCTAssertTrue(app.staticTexts["Nico"].waitForExistence(timeout: 8))
+        capture("\(prefix)-home")
+        tapTab("Räume")
+        capture("\(prefix)-rooms")
+        tapTab("Medien")
+        capture("\(prefix)-media")
+        tapTab("System")
+        captureSecondaryScenes("\(prefix)-scenes")
+        capture("\(prefix)-system")
+    }
+
+    private func captureSecondaryScenes(_ name: String) {
+        let disclosure = app.buttons["Diagnose und Inventar"]
+        if disclosure.waitForExistence(timeout: 5) { disclosure.tap() }
+        tapEnsuringVisible("Szenen", maxSwipes: 4)
+        capture(name)
+        tapBack()
+    }
+
+    private func capture(_ name: String) {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func tapTab(_ title: String) {
+        let button = app.tabBars.buttons[title]
+        XCTAssertTrue(button.waitForExistence(timeout: 8), "Missing tab: \(title)")
+        button.tap()
+    }
+
+    private func tapEnsuringVisible(_ label: String, maxSwipes: Int) {
+        for _ in 0...maxSwipes {
+            let button = app.buttons[label]
+            if button.exists && button.isHittable { button.tap(); return }
+            let text = app.staticTexts[label]
+            if text.exists && text.isHittable { text.tap(); return }
+            app.swipeUp()
+        }
+        XCTFail("Missing visible UI element: \(label)")
+    }
+
+    private func tapBack() {
+        let button = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing back button")
+        button.tap()
+    }
+}

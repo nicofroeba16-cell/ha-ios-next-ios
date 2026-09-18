@@ -1,0 +1,190 @@
+name: Local ZipApp Free Sideload IPA
+
+on:
+  push:
+    branches:
+      - test/local-zipapp-free-sideload-20260918
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build exact local ZipApp source as unsigned device IPA
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - name: Checkout transferred local source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Prove source shape and macOS device SDK
+        run: |
+          set -euo pipefail
+          test -f project.yml
+          test -d Sources
+          test -f Info.plist
+          test ! -e WireGuard
+          ! grep -RInE 'IOSNextPacketTunnel|com\.apple\.developer\.networking\.networkextension|CODE_SIGN_ENTITLEMENTS' project.yml Sources Info.plist || exit 1
+          sw_vers
+          xcodebuild -version
+          echo "iphoneos SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
+          test -n "$(xcrun --sdk iphoneos --show-sdk-path)"
+
+      - name: Ensure XcodeGen
+        run: |
+          set -euo pipefail
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+          else
+            brew install xcodegen
+          fi
+
+      - name: Create runtime Free spec and generate project
+        run: |
+          set -euo pipefail
+          cp project.yml project.free.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('project.free.yml')
+          t=p.read_text()
+          # This transferred ZipApp source already has no tunnel target/dependency
+          # and no entitlements setting. Keep the runtime safeguard explicit.
+          if 'IOSNextPacketTunnel' in t:
+              raise SystemExit('unexpected IOSNextPacketTunnel in local source')
+          if 'CODE_SIGN_ENTITLEMENTS' in t:
+              raise SystemExit('unexpected CODE_SIGN_ENTITLEMENTS in local source')
+          p.write_text(t)
+          PY
+          xcodegen generate --spec project.free.yml
+
+      - name: Verify generated main target settings
+        run: |
+          set -euo pipefail
+          xcodebuild -project IOSNext.xcodeproj -target IOSNext -configuration Release -sdk iphoneos -showBuildSettings > free-build-settings.txt
+          grep -E 'PRODUCT_BUNDLE_IDENTIFIER|IPHONEOS_DEPLOYMENT_TARGET|ARCHS|CODE_SIGN_ENTITLEMENTS' free-build-settings.txt || true
+          ENT_LINE="$(grep -E '^[[:space:]]*CODE_SIGN_ENTITLEMENTS[[:space:]]*=' free-build-settings.txt | tail -1 || true)"
+          if [ -n "$ENT_LINE" ]; then
+            VALUE="${ENT_LINE#*=}"; VALUE="$(echo "$VALUE" | xargs)"; test -z "$VALUE"
+          fi
+          ! grep -q 'IOSNextPacketTunnel' IOSNext.xcodeproj/project.pbxproj
+
+      - name: Build Release iphoneos app unsigned
+        run: |
+          set -euo pipefail
+          rm -rf build
+          xcodebuild build \
+            -project IOSNext.xcodeproj \
+            -scheme IOSNext \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Validate built device app
+        run: |
+          set -euo pipefail
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/IOSNext.app"
+          test -d "$APP"
+          test -f "$APP/Info.plist"
+          EXEC_NAME="$(plutil -extract CFBundleExecutable raw -o - "$APP/Info.plist")"
+          EXEC="$APP/$EXEC_NAME"
+          test -x "$EXEC"
+          BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP/Info.plist")"
+          DEPLOYMENT="$(plutil -extract MinimumOSVersion raw -o - "$APP/Info.plist")"
+          ARCHS="$(lipo -archs "$EXEC")"
+          echo "EXECUTABLE=$EXEC_NAME"
+          echo "BUNDLE_ID=$BUNDLE_ID"
+          echo "DEPLOYMENT_TARGET=$DEPLOYMENT"
+          echo "ARCHS=$ARCHS"
+          file "$EXEC"
+          test "$ARCHS" = "arm64"
+          xcrun vtool -show-build "$EXEC" | tee device-build-metadata.txt
+          grep -Eq 'platform +IOS($| )' device-build-metadata.txt
+          ! echo "$ARCHS" | grep -q 'x86_64'
+          test ! -f "$APP/embedded.mobileprovision"
+          test ! -e "$APP/PlugIns/IOSNextPacketTunnel.appex"
+          set +e
+          codesign -dv --verbose=4 "$APP" >codesign-metadata.txt 2>&1
+          SIGN_RC=$?
+          codesign -d --entitlements :- "$APP" >app-entitlements.plist 2>codesign-entitlements-stderr.txt
+          ENT_RC=$?
+          set -e
+          echo "codesign_metadata_exit=$SIGN_RC"
+          echo "codesign_entitlements_exit=$ENT_RC"
+          test "$SIGN_RC" -ne 0
+          ! grep -q 'com.apple.developer.networking.networkextension' app-entitlements.plist 2>/dev/null
+          echo "packet_tunnel_extension=absent"
+          echo "network_extension_entitlement=absent"
+          echo "embedded_mobileprovision=absent"
+          {
+            echo "bundle_id=$BUNDLE_ID"
+            echo "deployment_target=$DEPLOYMENT"
+            echo "architectures=$ARCHS"
+          } > app-metadata.txt
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/IOSNext.app"
+          rm -rf ipa-root IOSNext-Free-unsigned.ipa
+          mkdir -p ipa-root/Payload
+          ditto "$APP" ipa-root/Payload/IOSNext.app
+          test ! -e ipa-root/Payload/IOSNext.app/PlugIns/IOSNextPacketTunnel.appex
+          (cd ipa-root && zip -qry "$GITHUB_WORKSPACE/IOSNext-Free-unsigned.ipa" Payload)
+          test -s IOSNext-Free-unsigned.ipa
+
+      - name: Validate IPA and record digest
+        run: |
+          set -euo pipefail
+          unzip -t IOSNext-Free-unsigned.ipa | tee unzip-test.txt
+          unzip -Z1 IOSNext-Free-unsigned.ipa | tee ipa-contents.txt
+          unzip -Z1 IOSNext-Free-unsigned.ipa | grep -Fx 'Payload/IOSNext.app/Info.plist'
+          if grep -q 'IOSNextPacketTunnel.appex' ipa-contents.txt; then exit 1; fi
+          rm -rf ipa-check && mkdir ipa-check
+          unzip -q IOSNext-Free-unsigned.ipa -d ipa-check
+          EXEC_NAME="$(plutil -extract CFBundleExecutable raw -o - ipa-check/Payload/IOSNext.app/Info.plist)"
+          test -x "ipa-check/Payload/IOSNext.app/$EXEC_NAME"
+          test "$(lipo -archs ipa-check/Payload/IOSNext.app/$EXEC_NAME)" = "arm64"
+          xcrun vtool -show-build "ipa-check/Payload/IOSNext.app/$EXEC_NAME" | grep -Eq 'platform +IOS($| )'
+          test ! -e ipa-check/Payload/IOSNext.app/PlugIns/IOSNextPacketTunnel.appex
+          set +e
+          codesign -d --entitlements :- ipa-check/Payload/IOSNext.app > downloaded-entitlements.plist 2>/dev/null
+          set -e
+          ! grep -q 'com.apple.developer.networking.networkextension' downloaded-entitlements.plist 2>/dev/null
+          SIZE="$(stat -f%z IOSNext-Free-unsigned.ipa)"
+          SHA="$(shasum -a 256 IOSNext-Free-unsigned.ipa | awk '{print $1}')"
+          BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - ipa-check/Payload/IOSNext.app/Info.plist)"
+          DEPLOYMENT="$(plutil -extract MinimumOSVersion raw -o - ipa-check/Payload/IOSNext.app/Info.plist)"
+          {
+            echo "source_path=/tmp/iosnext-zip-video-20260918-155539/ZipApp"
+            echo "source_manifest_sha256=5413aaf5306d5f837dd99525fb480f3a48bcd4eed137a65d68fda8306edc7981"
+            echo "ipa_file=IOSNext-Free-unsigned.ipa"
+            echo "artifact_name=iosnext-local-free-unsigned-ipa"
+            echo "size_bytes=$SIZE"
+            echo "sha256=$SHA"
+            echo "bundle_id=$BUNDLE_ID"
+            echo "deployment_target=$DEPLOYMENT"
+            echo "packet_tunnel_extension=absent"
+            echo "network_extension_entitlement=absent"
+          } | tee free-ipa-metadata.txt
+
+      - name: Upload Free candidate artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: iosnext-local-free-unsigned-ipa
+          path: |
+            IOSNext-Free-unsigned.ipa
+            free-ipa-metadata.txt
+            ipa-contents.txt
+            unzip-test.txt
+            app-metadata.txt
+            device-build-metadata.txt
+            codesign-metadata.txt
+            codesign-entitlements-stderr.txt
+          if-no-files-found: error
+          retention-days: 7
