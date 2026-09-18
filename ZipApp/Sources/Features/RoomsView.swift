@@ -108,66 +108,43 @@ struct RoomDetailView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                IOS27StatusCard(
-                    title: area.appDisplayName,
-                    value: "\(appModel.devices(inArea: area.id).count) Geräte",
-                    symbol: "door.left.hand.open",
-                    tint: .blue,
-                    detail: "\(roomEntities.filter(\.isOn).count) aktiv"
-                )
+                if isNicoRoom {
+                    NicoRoomDashboardContent(appModel: appModel)
+                } else {
+                    IOS27StatusCard(
+                        title: area.appDisplayName,
+                        value: "\(appModel.devices(inArea: area.id).count) Geräte",
+                        symbol: "door.left.hand.open",
+                        tint: .blue,
+                        detail: "\(roomEntities.filter(\.isOn).count) aktiv"
+                    )
 
-                if !otherControls.isEmpty {
-                    IOS27SectionHeader(title: "Steuerung", subtitle: "Primäre Raumaktionen")
-                    ForEach(otherControls) { entity in
-                        NavigationLink {
-                            EntityControlView(entityID: entity.entityID, appModel: appModel)
-                        } label: {
-                            IOS27StatusCard(
-                                title: entity.displayName,
-                                value: entity.secondaryStateText,
-                                symbol: entity.iconName,
-                                tint: entity.isOn ? .green : .secondary
-                            )
+                    if !otherControls.isEmpty {
+                        IOS27SectionHeader(title: "Steuerung", subtitle: "Primäre Raumaktionen")
+                        ForEach(otherControls) { entity in
+                            NavigationLink {
+                                EntityControlView(entityID: entity.entityID, appModel: appModel)
+                            } label: {
+                                IOS27StatusCard(
+                                    title: entity.displayName,
+                                    value: entity.secondaryStateText,
+                                    symbol: entity.iconName,
+                                    tint: entity.isOn ? .green : .secondary
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
-                }
 
-                if !lights.isEmpty {
-                    IOS27SectionHeader(title: "Licht", subtitle: "Direkte Raumsteuerung")
-                    ForEach(lights) { entity in
-                        IOS27LightCard(entity: entity, appModel: appModel)
-                    }
-                }
-
-                if isNicoRoom, let prisma = entity("scene.kronach_kronach_prisma") {
-                    IOS27SectionHeader(title: "Lichtszene", subtitle: "Referenz aus dem Home-Assistant-Dashboard")
-                    Button {
-                        Task { await appModel.activate(prisma) }
-                    } label: {
-                        IOS27StatusCard(title: "Prisma", value: "Aktivieren", symbol: "sparkles", tint: .purple)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if !media.isEmpty {
-                    IOS27SectionHeader(title: "Medien", subtitle: isNicoRoom ? "Apple TV · Denon · PlayStation" : "Player und Receiver")
-                    if isNicoRoom {
-                        IOS27MediaZoneCard(
-                            title: "Nico Medien",
-                            subtitle: "Apple TV und Denon gekoppelt · PlayStation separat",
-                            players: media,
-                            masterState: entity("binary_sensor.nico_medien_aktiv"),
-                            masterScript: entity("script.nico_medien_master_zentrale"),
-                            appModel: appModel
-                        )
-                        if let tvPower = entity("switch.tv_steckdose_1") {
-                            EntityRow(entity: tvPower) { Task { await appModel.toggle(tvPower) } }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .ios27ContentSurface(radius: 20)
+                    if !lights.isEmpty {
+                        IOS27SectionHeader(title: "Licht", subtitle: "Direkte Raumsteuerung")
+                        ForEach(lights) { entity in
+                            IOS27LightCard(entity: entity, appModel: appModel)
                         }
-                    } else {
+                    }
+
+                    if !media.isEmpty {
+                        IOS27SectionHeader(title: "Medien", subtitle: "Player und Receiver")
                         ForEach(media) { entity in
                             IOS27MediaCard(
                                 player: entity,
@@ -202,7 +179,7 @@ struct RoomDetailView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 96)
+            .padding(.bottom, 120)
         }
         .background(IOS27HomeBackground())
         .navigationTitle(area.appDisplayName)
@@ -216,6 +193,231 @@ struct RoomDetailView: View {
     private func volumePlayer(for entity: HomeAssistantEntity) -> HomeAssistantEntity? {
         guard entity.entityID == "media_player.nico_zimmer_untergeschoss_apple_tv" else { return nil }
         return appModel.entities.first { $0.entityID == "media_player.denon_avr_x1300w" }
+    }
+}
+
+
+private struct NicoRoomDashboardContent: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let appModel: AppModel
+
+    private var tvLights: [HomeAssistantEntity] {
+        ["light.kronach_fernseher_links", "light.kronach_fernseher_rechts"].compactMap(entity)
+    }
+
+    private var compactLights: [HomeAssistantEntity] {
+        ["light.kronach_schrank", "switch.schreibtisch_rgb_standlampe_steckdose_1"].compactMap(entity)
+    }
+
+    private var mediaPlayers: [HomeAssistantEntity] {
+        [
+            "media_player.nico_zimmer_untergeschoss_apple_tv",
+            "media_player.denon_avr_x1300w",
+            "media_player.playstation_5"
+        ].compactMap(entity)
+    }
+
+    private var lightMaster: HomeAssistantEntity {
+        entity("group.nico_beleuchtung") ?? HomeAssistantEntity(
+            entityID: "group.nico_beleuchtung",
+            state: (tvLights + compactLights).contains(where: \.isOn) ? "on" : "off",
+            attributes: [:]
+        )
+    }
+
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible(), spacing: 12)]
+            : [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    }
+
+    var body: some View {
+        IOS27SectionHeader(title: "Beleuchtung", subtitle: "TV · Schrank · Schreibtisch")
+
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(tvLights) { light in
+                NicoPrimaryLightTile(entity: light, appModel: appModel)
+            }
+        }
+
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(compactLights) { light in
+                NicoCompactControlTile(entity: light, appModel: appModel)
+            }
+        }
+
+        LazyVGrid(columns: columns, spacing: 12) {
+            NicoActionTile(
+                title: "Licht Master",
+                subtitle: lightMaster.isOn ? "Geräte an" : "Alles aus",
+                symbol: "power",
+                tint: lightMaster.isOn ? .green : .red
+            ) {
+                Task { await appModel.toggle(lightMaster) }
+            }
+
+            if let prisma = entity("scene.kronach_kronach_prisma") {
+                NicoActionTile(
+                    title: "Prisma",
+                    subtitle: "Schrank-Effekt",
+                    symbol: "paintpalette.fill",
+                    tint: .purple
+                ) {
+                    Task { await appModel.activate(prisma) }
+                }
+            }
+        }
+
+        IOS27SectionHeader(title: "Medien-Center", subtitle: "Apple TV · Denon · PS5")
+
+        LazyVGrid(columns: columns, spacing: 12) {
+            if let mediaMaster = entity("script.nico_medien_master_zentrale") {
+                let mediaState = entity("binary_sensor.nico_medien_aktiv")
+                NicoActionTile(
+                    title: "Medien Master",
+                    subtitle: mediaState?.isOn == true ? "Geräte aktiv" : "Alles aus",
+                    symbol: "power",
+                    tint: mediaState?.isOn == true ? .green : .red
+                ) {
+                    Task { await appModel.activateScript(mediaMaster) }
+                }
+            }
+
+            if let tvPower = entity("switch.tv_steckdose_1") {
+                NicoActionTile(
+                    title: "TV Steckdose",
+                    subtitle: tvPower.isOn ? "Ein" : "Aus",
+                    symbol: "powerplug.fill",
+                    tint: tvPower.isOn ? .green : .secondary
+                ) {
+                    Task { await appModel.toggle(tvPower) }
+                }
+            }
+        }
+
+        if !mediaPlayers.isEmpty {
+            IOS27MediaZoneCard(
+                title: "Nico Medien",
+                subtitle: "Apple TV und Denon gekoppelt · PlayStation separat",
+                players: mediaPlayers,
+                masterState: entity("binary_sensor.nico_medien_aktiv"),
+                masterScript: nil,
+                appModel: appModel
+            )
+        }
+    }
+
+    private func entity(_ id: String) -> HomeAssistantEntity? {
+        appModel.entities.first { $0.entityID == id }
+    }
+}
+
+private struct NicoPrimaryLightTile: View {
+    let entity: HomeAssistantEntity
+    let appModel: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.headline)
+                    .foregroundStyle(entity.isOn ? .yellow : .secondary)
+                    .frame(width: 38, height: 38)
+                    .background((entity.isOn ? Color.yellow : Color.secondary).opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
+                Spacer()
+                Button {
+                    Task { await appModel.toggle(entity) }
+                } label: {
+                    Image(systemName: "power")
+                        .frame(width: 38, height: 38)
+                }
+                .ios27GlassButton()
+                .tint(entity.isOn ? .yellow : .secondary)
+                .accessibilityLabel(entity.isOn ? "Ausschalten" : "Einschalten")
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entity.displayName)
+                    .font(.headline)
+                Text(entity.isOn ? "Eingeschaltet" : "Ausgeschaltet")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let brightness = entity.brightness {
+                Slider(value: Binding(
+                    get: { min(max(brightness / 255, 0), 1) },
+                    set: { value in Task { await appModel.setBrightness(value, for: entity) } }
+                ))
+                .accessibilityLabel("Helligkeit \(entity.displayName)")
+                .accessibilityValue("\(Int((brightness / 255) * 100)) Prozent")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 158, alignment: .topLeading)
+        .ios27ContentSurface(radius: 24)
+    }
+}
+
+private struct NicoCompactControlTile: View {
+    let entity: HomeAssistantEntity
+    let appModel: AppModel
+
+    var body: some View {
+        Button {
+            Task { await appModel.toggle(entity) }
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: entity.domain == "light" ? "lightbulb.fill" : "lamp.desk.fill")
+                    .foregroundStyle(entity.isOn ? .yellow : .secondary)
+                    .frame(width: 34, height: 34)
+                    .background((entity.isOn ? Color.yellow : Color.secondary).opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entity.displayName).font(.subheadline.weight(.semibold))
+                    Text(entity.isOn ? "Ein" : "Aus").font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .padding(14)
+            .ios27ContentSurface(radius: 20)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(entity.displayName)
+        .accessibilityValue(entity.isOn ? "Ein" : "Aus")
+        .accessibilityHint("Schaltet \(entity.displayName) um")
+    }
+}
+
+private struct NicoActionTile: View {
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: symbol)
+                    .font(.headline)
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(subtitle).font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+            .padding(14)
+            .ios27ContentSurface(radius: 20)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(subtitle)
     }
 }
 

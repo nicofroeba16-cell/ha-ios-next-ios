@@ -29,6 +29,7 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
         case "light.kronach_schrank": "Schrank"
         case "switch.schreibtisch_rgb_standlampe_steckdose_1": "Schreibtischlampe"
         case "switch.tv_steckdose_1": "TV-Strom"
+        case "group.nico_beleuchtung": "Licht Master"
         case "media_player.nico_zimmer_untergeschoss_apple_tv": "Apple TV"
         case "media_player.denon_avr_x1300w": "Denon AVR"
         case "media_player.playstation_5": "PlayStation 5"
@@ -73,7 +74,7 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
     }
 
     var supportsToggle: Bool {
-        ["light", "switch", "fan", "input_boolean"].contains(domain)
+        ["light", "switch", "fan", "input_boolean", "group"].contains(domain)
     }
 
     var supportsMediaControls: Bool { domain == "media_player" }
@@ -91,6 +92,7 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
         switch domain {
         case "light": "lightbulb.fill"
         case "switch", "input_boolean": "switch.2"
+        case "group": "lightbulb.2.fill"
         case "media_player": "play.rectangle.fill"
         case "scene": "circle.hexagongrid.fill"
         case "script": "scroll.fill"
