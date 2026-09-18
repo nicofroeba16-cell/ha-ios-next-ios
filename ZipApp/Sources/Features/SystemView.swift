@@ -62,13 +62,15 @@ struct SystemView: View {
                 HomeConnectionPill(state: appModel.connectionState)
             }
             Divider()
-            HStack(spacing: 12) {
-                Button("Verwalten") { appModel.isPresentingConnection = true }
-                    .ios27GlassButton()
-                Button("Aktualisieren") { Task { await appModel.refresh() } }
-                    .ios27GlassButton(prominent: true)
-                    .disabled(isBusy)
-                Spacer()
+            IOS27GlassControlGroup(spacing: 12) {
+                HStack(spacing: 12) {
+                    Button("Verwalten") { appModel.isPresentingConnection = true }
+                        .ios27GlassButton()
+                    Button("Aktualisieren") { Task { await appModel.refresh() } }
+                        .ios27GlassButton(prominent: true)
+                        .disabled(isBusy)
+                    Spacer()
+                }
             }
             if let error = appModel.lastActionError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")

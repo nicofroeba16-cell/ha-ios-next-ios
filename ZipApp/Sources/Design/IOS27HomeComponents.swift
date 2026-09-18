@@ -177,6 +177,28 @@ struct IOS27PressStyle: ButtonStyle {
     }
 }
 
+
+struct IOS27GlassControlGroup<Content: View>: View {
+    let spacing: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    init(spacing: CGFloat = 12, @ViewBuilder content: @escaping () -> Content) {
+        self.spacing = spacing
+        self.content = content
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+}
+
 struct IOS27GlassButtonStyle: ViewModifier {
     let prominent: Bool
 

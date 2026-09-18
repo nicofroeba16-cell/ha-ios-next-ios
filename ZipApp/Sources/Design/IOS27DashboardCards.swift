@@ -93,12 +93,14 @@ struct IOS27MediaCard: View {
                     .foregroundStyle(player.state == "playing" ? .green : .secondary)
             }
 
-            HStack(spacing: 18) {
-                mediaButton("backward.end.fill", "Vorheriger Titel", "media_previous_track")
-                mediaButton(player.state == "playing" ? "pause.fill" : "play.fill", "Wiedergabe", player.state == "playing" ? "media_pause" : "media_play", prominent: true)
-                mediaButton("forward.end.fill", "Nächster Titel", "media_next_track")
+            IOS27GlassControlGroup(spacing: 18) {
+                HStack(spacing: 18) {
+                    mediaButton("backward.end.fill", "Vorheriger Titel", "media_previous_track")
+                    mediaButton(player.state == "playing" ? "pause.fill" : "play.fill", "Wiedergabe", player.state == "playing" ? "media_pause" : "media_play", prominent: true)
+                    mediaButton("forward.end.fill", "Nächster Titel", "media_next_track")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
 
             if let volume = effectiveVolumePlayer.volumeLevel {
                 HStack(spacing: 10) {
@@ -252,21 +254,23 @@ struct IOS27FireTVCompanionCard: View {
                     .frame(width: 8, height: 8)
             }
 
-            HStack(spacing: 12) {
-                companionButton("power", "Power") {
-                    Task { await appModel.callService(for: player, service: player.isOn ? "turn_off" : "turn_on") }
+            IOS27GlassControlGroup(spacing: 12) {
+                HStack(spacing: 12) {
+                    companionButton("power", "Power") {
+                        Task { await appModel.callService(for: player, service: player.isOn ? "turn_off" : "turn_on") }
+                    }
+                    companionButton("gobackward.10", "10 Sekunden zurück") {
+                        Task { await appModel.seekRelative(-10, for: player) }
+                    }
+                    companionButton(player.state == "playing" ? "pause.fill" : "play.fill", "Wiedergabe", prominent: true) {
+                        Task { await appModel.callService(for: player, service: player.state == "playing" ? "media_pause" : "media_play") }
+                    }
+                    companionButton("goforward.10", "10 Sekunden vor") {
+                        Task { await appModel.seekRelative(10, for: player) }
+                    }
                 }
-                companionButton("gobackward.10", "10 Sekunden zurück") {
-                    Task { await appModel.seekRelative(-10, for: player) }
-                }
-                companionButton(player.state == "playing" ? "pause.fill" : "play.fill", "Wiedergabe", prominent: true) {
-                    Task { await appModel.callService(for: player, service: player.state == "playing" ? "media_pause" : "media_play") }
-                }
-                companionButton("goforward.10", "10 Sekunden vor") {
-                    Task { await appModel.seekRelative(10, for: player) }
-                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
 
             HStack(spacing: 8) {
                 capabilityChip("Player", "play.fill")
