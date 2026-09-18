@@ -107,6 +107,17 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
         return stateDisplayText
     }
 
+    var isPrimaryRoomControl: Bool {
+        guard [.toggle, .fan, .cover, .climate, .lock].contains(controlKind) else { return false }
+        let searchable = "\(entityID) \(displayName)".lowercased()
+        let technicalTerms = [
+            "wi-fi", "wifi", "wlan", "pre-release", "pre_release", "kindersicherung",
+            "automation:", "automatische aktualisierungen", "bluetooth", "cloud", "sprache",
+            "safe browsing", "sichere suche", "abfrageprotokoll", "filterung", "jugendschutz"
+        ]
+        return !technicalTerms.contains { searchable.contains($0) }
+    }
+
     var controlKind: EntityControlKind {
         switch domain {
         case "light": .light

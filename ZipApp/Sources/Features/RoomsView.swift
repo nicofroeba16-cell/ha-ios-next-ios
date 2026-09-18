@@ -79,7 +79,7 @@ struct RoomDetailView: View {
     private var media: [HomeAssistantEntity] { roomEntities.filter { $0.domain == "media_player" } }
     private var otherControls: [HomeAssistantEntity] {
         roomEntities.filter { entity in
-            !lights.contains(entity) && !media.contains(entity) && entity.controlKind != .readOnly
+            !lights.contains(entity) && !media.contains(entity) && entity.isPrimaryRoomControl
         }
     }
 
