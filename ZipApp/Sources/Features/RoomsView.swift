@@ -53,7 +53,7 @@ struct RoomsView: View {
     }
 }
 
-private struct RoomDetailView: View {
+struct RoomDetailView: View {
     let area: HomeAssistantArea
     let appModel: AppModel
 

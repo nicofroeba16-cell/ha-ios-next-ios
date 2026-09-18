@@ -9,6 +9,19 @@ struct ProfileDefinition: Equatable, Sendable {
 enum ProfileCatalog {
     static func definition(for profile: HomeProfile) -> ProfileDefinition {
         switch profile {
+        case .nico:
+            ProfileDefinition(
+                profile: .nico,
+                roomNames: ["Nico Zimmer"],
+                favoriteEntityIDs: [
+                    "light.kronach_fernseher_links",
+                    "light.kronach_fernseher_rechts",
+                    "light.kronach_schrank",
+                    "media_player.nico_zimmer_untergeschoss_apple_tv",
+                    "media_player.denon_avr_x1300w",
+                    "media_player.playstation_5"
+                ]
+            )
         case .timo:
             ProfileDefinition(
                 profile: .timo,

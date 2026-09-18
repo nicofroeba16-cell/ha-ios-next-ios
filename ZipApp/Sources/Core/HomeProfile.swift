@@ -1,6 +1,7 @@
 import Foundation
 
 enum HomeProfile: String, CaseIterable, Identifiable, Codable {
+    case nico
     case timo
     case mika
     case juli
@@ -8,12 +9,11 @@ enum HomeProfile: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
-    var title: String {
-        rawValue.capitalized
-    }
+    var title: String { rawValue.capitalized }
 
     var subtitle: String {
         switch self {
+        case .nico: "Owner · Admin & Zuhause"
         case .timo: "Zimmer & Schlafzimmer"
         case .mika: "Zimmer & Medien"
         case .juli: "Dein Zuhause einrichten"
@@ -23,10 +23,10 @@ enum HomeProfile: String, CaseIterable, Identifiable, Codable {
 
     var primaryArea: String {
         switch self {
+        case .nico: "Nico Zimmer"
         case .timo: "Timo Zimmer"
         case .mika: "Mika Zimmer"
-        case .juli: "Zuhause"
-        case .gabi: "Zuhause"
+        case .juli, .gabi: "Zuhause"
         }
     }
 }

@@ -15,6 +15,7 @@ struct IOSNextApp: App {
     var body: some Scene {
         WindowGroup {
             AppRootView(appModel: appModel)
+                .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--video-demo") ? .dark : nil)
         }
     }
 }

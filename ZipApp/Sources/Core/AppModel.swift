@@ -22,7 +22,7 @@ final class AppModel {
         }
     }
 
-    var selectedProfile: HomeProfile = .timo
+    var selectedProfile: HomeProfile = .nico
     var connectionState: ConnectionState = .notConfigured
     var entities: [HomeAssistantEntity] = []
     var areas: [HomeAssistantArea] = []
