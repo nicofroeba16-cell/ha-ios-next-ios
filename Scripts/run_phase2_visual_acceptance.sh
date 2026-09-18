@@ -4,6 +4,8 @@ set -euo pipefail
 APP_ID="de.nicofroeba16.iosnext"
 MATRIX="UITests/VisualAcceptanceMatrix.json"
 MATRIX_HEAD="dafb1ae63da7bccad28d6cc40aa95a06ec342426"
+MATRIX_JSON_SHA256="0fad724ea19da47266a46405db951cfa7a715f0c237fb0cf50852e98665a097c"
+MATRIX_DOC_SHA256="acad10e9c85fb9eb65fc7c5fbf9681f65daf6dd84aa6db598c7af17d1eccb17e"
 MANIFEST="CIEvidence/phase2-visual-acceptance-manifest.json"
 TEST_METHOD="IOSNextUITests/IOSNextUITests/testPhase2Scenario"
 
@@ -16,8 +18,10 @@ case "$XCTESTRUN_PATH" in
   *) echo "XCTESTRUN_PATH escaped current DerivedData" >&2; exit 2 ;;
 esac
 
-git cat-file -e "$MATRIX_HEAD^{commit}"
-git diff --exit-code "$MATRIX_HEAD" -- "$MATRIX" UITests/VISUAL_ACCEPTANCE_MATRIX.md
+matrix_json_hash="$(shasum -a 256 "$MATRIX" | awk '{print $1}')"
+matrix_doc_hash="$(shasum -a 256 UITests/VISUAL_ACCEPTANCE_MATRIX.md | awk '{print $1}')"
+test "$matrix_json_hash" = "$MATRIX_JSON_SHA256" || { echo "Phase-1 matrix JSON hash drift: $matrix_json_hash" >&2; exit 3; }
+test "$matrix_doc_hash" = "$MATRIX_DOC_SHA256" || { echo "Phase-1 matrix documentation hash drift: $matrix_doc_hash" >&2; exit 3; }
 python3 Scripts/validate_visual_acceptance_matrix.py
 
 rm -rf UIAcceptance CardScreenshots AnimationAcceptance DarkVisualAcceptance

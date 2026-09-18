@@ -40,7 +40,10 @@ for item in scenarios:
         continue
     assert any(sid.startswith(prefix) for prefix in range_markers), sid
 
-assert 'git diff --exit-code "$MATRIX_HEAD"' in RUNNER
+assert 'MATRIX_JSON_SHA256="0fad724ea19da47266a46405db951cfa7a715f0c237fb0cf50852e98665a097c"' in RUNNER
+assert 'MATRIX_DOC_SHA256="acad10e9c85fb9eb65fc7c5fbf9681f65daf6dd84aa6db598c7af17d1eccb17e"' in RUNNER
+assert 'Phase-1 matrix JSON hash drift' in RUNNER
+assert 'Phase-1 matrix documentation hash drift' in RUNNER
 assert 'phase2-plan.tsv' in RUNNER
 assert 'phase2_results.py' in RUNNER
 assert 'testPhase2Scenario' in RUNNER
