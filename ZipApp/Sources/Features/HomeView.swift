@@ -114,7 +114,7 @@ struct HomeView: View {
                 .padding(20)
             }
             .frame(maxWidth: .infinity, minHeight: 224, alignment: .leading)
-            .ios27ContentSurface(radius: 30, tint: .purple, elevated: true)
+            .ios27ContentSurface(radius: 30, elevated: true)
             .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
         .buttonStyle(IOS27PressStyle())
@@ -160,7 +160,7 @@ struct HomeView: View {
         }
         .padding(15)
         .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
-        .ios27ContentSurface(radius: 24, tint: item.tint)
+        .ios27ContentSurface(radius: 24)
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
@@ -174,7 +174,7 @@ struct HomeView: View {
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 6)
-        .ios27ContentSurface(radius: 24, tint: .indigo)
+        .ios27ContentSurface(radius: 24)
     }
 
     private var divider: some View {

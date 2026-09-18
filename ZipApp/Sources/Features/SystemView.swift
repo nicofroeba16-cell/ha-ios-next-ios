@@ -93,7 +93,7 @@ struct SystemView: View {
             }
         }
         .padding(16)
-        .ios27ContentSurface(radius: 24, tint: appModel.isConnected ? .green : .orange)
+        .ios27ContentSurface(radius: 24)
     }
 
     private var inventoryStrip: some View {

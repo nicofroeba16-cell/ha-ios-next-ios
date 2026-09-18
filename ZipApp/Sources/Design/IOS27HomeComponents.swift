@@ -64,22 +64,20 @@ extension View {
 
 struct IOS27ContentSurface: ViewModifier {
     let radius: CGFloat
-    let tint: Color
     let elevated: Bool
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .background(Color(.secondarySystemGroupedBackground), in: shape)
-            .background(tint.opacity(0.035), in: shape)
             .overlay(shape.stroke(Color.primary.opacity(0.055), lineWidth: 0.5))
             .shadow(color: elevated ? Color.black.opacity(0.10) : .clear, radius: elevated ? 14 : 0, y: elevated ? 7 : 0)
     }
 }
 
 extension View {
-    func ios27ContentSurface(radius: CGFloat = 24, tint: Color = .clear, elevated: Bool = false) -> some View {
-        modifier(IOS27ContentSurface(radius: radius, tint: tint, elevated: elevated))
+    func ios27ContentSurface(radius: CGFloat = 24, elevated: Bool = false) -> some View {
+        modifier(IOS27ContentSurface(radius: radius, elevated: elevated))
     }
 }
 
