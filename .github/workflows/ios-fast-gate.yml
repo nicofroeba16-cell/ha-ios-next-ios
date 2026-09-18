@@ -40,6 +40,20 @@ jobs:
             -derivedDataPath "$DERIVED" \
             -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
             CODE_SIGNING_ALLOWED=NO
+      - name: Package simulator app
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/iosnext-video-derived/Build/Products/Debug-iphonesimulator/IOSNext.app"
+          test -d "$APP"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$GITHUB_WORKSPACE/IOSNext-Simulator-App.zip"
+          ls -lh "$GITHUB_WORKSPACE/IOSNext-Simulator-App.zip"
+      - name: Upload simulator app
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: IOSNext-Simulator-App
+          path: IOSNext-Simulator-App.zip
+          if-no-files-found: error
+          retention-days: 1
       - name: Record visible app tour
         working-directory: ZipApp
         run: |
