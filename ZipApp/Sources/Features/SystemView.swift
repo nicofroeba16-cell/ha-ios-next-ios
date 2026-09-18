@@ -53,8 +53,9 @@ struct SystemView: View {
                 diagnosticsCard
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 96)
+            .padding(.bottom, 24)
         }
+        .ios27ScrollBottomClearance()
         .background(IOS27HomeBackground())
         .navigationTitle("System")
         .navigationBarTitleDisplayMode(.large)
@@ -128,7 +129,7 @@ struct SystemView: View {
                     let active = warning.isOn || warning.state == "problem"
                     IOS27StatusCard(
                         title: warning.displayName,
-                        value: active ? "Aktiv" : warning.secondaryStateText,
+                        value: active ? "Warnung aktiv" : "Keine Warnung",
                         symbol: active ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
                         tint: active ? .orange : .green,
                         detail: acknowledgementText(for: warning)

@@ -17,6 +17,9 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
         if let friendly = attributes["friendly_name"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
            !friendly.isEmpty,
            friendly.localizedCaseInsensitiveCompare(entityID) != .orderedSame {
+            if domain == "update" && friendly.localizedCaseInsensitiveCompare("Update") == .orderedSame {
+                return presentationFallbackName
+            }
             return friendly
         }
         return presentationFallbackName
@@ -35,6 +38,8 @@ struct HomeAssistantEntity: Identifiable, Hashable, Sendable {
         case "media_player.playstation_5": "PlayStation 5"
         case "light.hutte": "Ambiente"
         case "light.tisch_tisch": "Tisch"
+        case "media_player.denon_avr_x1800h": "Denon AVR"
+        case "media_player.gigatv_home": "GigaTV"
         default: nil
         }
     }

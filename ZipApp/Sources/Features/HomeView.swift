@@ -53,8 +53,9 @@ struct HomeView: View {
                     systemStrip
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 96)
+                .padding(.bottom, 24)
             }
+            .ios27ScrollBottomClearance()
         }
         .navigationTitle("Zuhause")
         .navigationBarTitleDisplayMode(.large)

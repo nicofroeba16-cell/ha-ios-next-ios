@@ -214,3 +214,20 @@ extension View {
             .contentShape(Rectangle())
     }
 }
+
+private struct IOS27ScrollBottomClearance: ViewModifier {
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: 72)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+extension View {
+    func ios27ScrollBottomClearance() -> some View {
+        modifier(IOS27ScrollBottomClearance())
+    }
+}

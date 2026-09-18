@@ -62,8 +62,9 @@ struct RoomsView: View {
 
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 96)
+            .padding(.bottom, 24)
         }
+        .ios27ScrollBottomClearance()
         .background(IOS27HomeBackground())
         .navigationTitle("Räume")
         .navigationBarTitleDisplayMode(.large)
@@ -76,6 +77,7 @@ struct RoomDetailView: View {
 
     private var roomEntities: [HomeAssistantEntity] { appModel.entities(inArea: area.id) }
     private var isNicoRoom: Bool { area.name.localizedCaseInsensitiveCompare("Nico Zimmer") == .orderedSame }
+    private var isHuetteRoom: Bool { area.name.localizedCaseInsensitiveCompare("Hütte Master") == .orderedSame || area.name.localizedCaseInsensitiveCompare("Hütte") == .orderedSame }
     private var lights: [HomeAssistantEntity] {
         if isNicoRoom {
             let order = [
@@ -85,6 +87,9 @@ struct RoomDetailView: View {
                 "switch.schreibtisch_rgb_standlampe_steckdose_1"
             ]
             return order.compactMap(entity)
+        }
+        if isHuetteRoom {
+            return ["light.hutte", "light.tisch_tisch"].compactMap(entity)
         }
         return roomEntities.filter { $0.domain == "light" || ($0.domain == "switch" && $0.displayName.localizedCaseInsensitiveContains("licht")) }
     }
@@ -96,10 +101,13 @@ struct RoomDetailView: View {
                 "media_player.playstation_5"
             ].compactMap(entity)
         }
+        if isHuetteRoom {
+            return ["media_player.denon_avr_x1800h", "media_player.gigatv_home"].compactMap(entity)
+        }
         return roomEntities.filter { $0.domain == "media_player" }
     }
     private var otherControls: [HomeAssistantEntity] {
-        guard !isNicoRoom else { return [] }
+        guard !isNicoRoom && !isHuetteRoom else { return [] }
         return roomEntities.filter { entity in
             !lights.contains(entity) && !media.contains(entity) && entity.isPrimaryRoomControl
         }
@@ -110,6 +118,8 @@ struct RoomDetailView: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 if isNicoRoom {
                     NicoRoomDashboardContent(appModel: appModel)
+                } else if isHuetteRoom {
+                    HuetteRoomDashboardContent(appModel: appModel)
                 } else {
                     IOS27StatusCard(
                         title: area.appDisplayName,
@@ -179,8 +189,9 @@ struct RoomDetailView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 120)
+            .padding(.bottom, 24)
         }
+        .ios27ScrollBottomClearance()
         .background(IOS27HomeBackground())
         .navigationTitle(area.appDisplayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -196,6 +207,62 @@ struct RoomDetailView: View {
     }
 }
 
+
+
+private struct HuetteRoomDashboardContent: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let appModel: AppModel
+
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible(), spacing: 12)]
+            : [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    }
+
+    var body: some View {
+        IOS27SectionHeader(title: "Beleuchtung", subtitle: "Ambiente · Tisch")
+
+        ForEach(["light.hutte", "light.tisch_tisch"].compactMap(entity)) { light in
+            IOS27LightCard(entity: light, appModel: appModel)
+        }
+
+        LazyVGrid(columns: columns, spacing: 12) {
+            let lightMaster = entity("group.hutte_beleuchtung") ?? HomeAssistantEntity(
+                entityID: "group.hutte_beleuchtung",
+                state: ["light.hutte", "light.tisch_tisch"].compactMap(entity).contains(where: \.isOn) ? "on" : "off",
+                attributes: [:]
+            )
+            NicoActionTile(
+                title: "Licht Master",
+                subtitle: lightMaster.isOn ? "Geräte an" : "Alles aus",
+                symbol: "power",
+                tint: lightMaster.isOn ? .green : .red
+            ) {
+                Task { await appModel.toggle(lightMaster) }
+            }
+
+            if let dimmed = entity("scene.hutte_master_tisch_gedimmt") {
+                NicoActionTile(
+                    title: "Tisch Gedimmt",
+                    subtitle: "Szene",
+                    symbol: "lamp.table.fill",
+                    tint: .orange
+                ) {
+                    Task { await appModel.activate(dimmed) }
+                }
+            }
+        }
+
+        IOS27SectionHeader(title: "Medien", subtitle: "Denon · GigaTV")
+        ForEach(["media_player.denon_avr_x1800h", "media_player.gigatv_home"].compactMap(entity)) { player in
+            IOS27MediaCard(player: player, appModel: appModel)
+        }
+    }
+
+    private func entity(_ id: String) -> HomeAssistantEntity? {
+        appModel.entities.first { $0.entityID == id }
+    }
+}
 
 private struct NicoRoomDashboardContent: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize

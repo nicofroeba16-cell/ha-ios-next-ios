@@ -18,8 +18,9 @@ struct ScenesView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 96)
+            .padding(.bottom, 24)
         }
+        .ios27ScrollBottomClearance()
         .background(IOS27HomeBackground())
         .navigationTitle("Szenen")
         .navigationBarTitleDisplayMode(.large)

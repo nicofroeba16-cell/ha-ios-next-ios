@@ -61,8 +61,9 @@ struct MediaView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 96)
+            .padding(.bottom, 24)
         }
+        .ios27ScrollBottomClearance()
         .background(IOS27HomeBackground())
         .navigationTitle("Medien")
         .navigationBarTitleDisplayMode(.large)
@@ -94,6 +95,7 @@ struct MediaDetailView: View {
             }
             .padding(16)
         }
+        .ios27ScrollBottomClearance()
         .background(IOS27HomeBackground())
         .navigationTitle(player?.displayName ?? "Jetzt läuft")
         .navigationBarTitleDisplayMode(.inline)
