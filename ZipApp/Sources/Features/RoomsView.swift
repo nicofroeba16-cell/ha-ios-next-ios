@@ -11,7 +11,7 @@ struct RoomsView: View {
                     HomeMetricTile(title: "Geräte", value: "\(appModel.devices.count)", icon: "cpu.fill", tint: .indigo)
                 }
                 .padding(.horizontal, 6)
-                .ios27Surface(radius: 24)
+                .ios27ContentSurface(radius: 24)
 
                 IOS27SectionHeader(title: "Räume", subtitle: "Bereiche und zugeordnete Geräte")
 
@@ -142,7 +142,7 @@ struct RoomDetailView: View {
                             if index != devices.indices.last { Divider().padding(.leading, 56) }
                         }
                     }
-                    .ios27Surface(radius: 24)
+                    .ios27ContentSurface(radius: 24)
                 }
             }
             .padding(.horizontal, 16)

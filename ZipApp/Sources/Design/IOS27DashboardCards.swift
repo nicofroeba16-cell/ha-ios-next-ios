@@ -61,7 +61,7 @@ struct IOS27LightCard: View {
             }
         }
         .padding(16)
-        .ios27Surface(radius: 24, tint: entity.isOn ? .yellow : .clear)
+        .ios27ContentSurface(radius: 24, tint: entity.isOn ? .yellow : .clear)
     }
 }
 
@@ -123,7 +123,7 @@ struct IOS27MediaCard: View {
             }
         }
         .padding(16)
-        .ios27Surface(radius: 24, tint: player.state == "playing" ? .blue : .clear)
+        .ios27ContentSurface(radius: 24, tint: player.state == "playing" ? .blue : .clear)
     }
 
     private func mediaButton(_ symbol: String, _ label: String, _ service: String, prominent: Bool = false) -> some View {
@@ -164,7 +164,7 @@ struct IOS27StatusCard: View {
             Spacer()
         }
         .padding(14)
-        .ios27Surface(radius: 20, tint: tint)
+        .ios27ContentSurface(radius: 20, tint: tint)
     }
 }
 
@@ -225,7 +225,7 @@ struct IOS27MediaZoneCard: View {
             }
         }
         .padding(18)
-        .ios27Surface(radius: 28, tint: .blue, elevated: true)
+        .ios27ContentSurface(radius: 28, tint: .blue, elevated: true)
     }
 }
 
@@ -292,7 +292,7 @@ struct IOS27FireTVCompanionCard: View {
             }
         }
         .padding(18)
-        .ios27Surface(radius: 28, tint: .orange, elevated: true)
+        .ios27ContentSurface(radius: 28, tint: .orange, elevated: true)
     }
 
     private func companionButton(_ symbol: String, _ label: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {

@@ -77,7 +77,7 @@ struct SystemView: View {
             }
         }
         .padding(16)
-        .ios27Surface(radius: 24, tint: appModel.isConnected ? .green : .orange)
+        .ios27ContentSurface(radius: 24, tint: appModel.isConnected ? .green : .orange)
     }
 
     private var inventoryStrip: some View {
@@ -89,7 +89,7 @@ struct SystemView: View {
             HomeMetricTile(title: "Geräte", value: "\(appModel.devices.count)", icon: "cpu.fill", tint: .purple)
         }
         .padding(.horizontal, 6)
-        .ios27Surface(radius: 24)
+        .ios27ContentSurface(radius: 24)
     }
 
     private var warningCenter: some View {
@@ -131,7 +131,7 @@ struct SystemView: View {
             }
         }
         .padding(.horizontal, 14)
-        .ios27Surface(radius: 24)
+        .ios27ContentSurface(radius: 24)
     }
 
     private func diagnosticLink(_ title: String, _ symbol: String, _ entities: [HomeAssistantEntity]) -> some View {
