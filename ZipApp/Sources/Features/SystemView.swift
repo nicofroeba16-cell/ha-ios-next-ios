@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SystemView: View {
     let appModel: AppModel
+    @State private var isConfirmingForgetConnection = false
 
     private var warningEntities: [HomeAssistantEntity] {
         appModel.entities.filter { entity in
@@ -51,6 +52,18 @@ struct SystemView: View {
         .background(IOS27HomeBackground())
         .navigationTitle("System")
         .navigationBarTitleDisplayMode(.large)
+        .confirmationDialog(
+            "Home-Assistant-Verbindung entfernen?",
+            isPresented: $isConfirmingForgetConnection,
+            titleVisibility: .visible
+        ) {
+            Button("Verbindung entfernen", role: .destructive) {
+                appModel.forgetConnection()
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Die gespeicherte Verbindung wird von diesem Gerät entfernt.")
+        }
     }
 
     private var connectionCard: some View {
@@ -127,7 +140,9 @@ struct SystemView: View {
             Divider().padding(.leading, 48)
             diagnosticLink("Entitäten ohne Raum", "questionmark.folder.fill", appModel.unassignedEntities)
             Divider().padding(.leading, 48)
-            Button(role: .destructive) { appModel.forgetConnection() } label: {
+            Button(role: .destructive) {
+                isConfirmingForgetConnection = true
+            } label: {
                 Label("Verbindung entfernen", systemImage: "trash")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 14)

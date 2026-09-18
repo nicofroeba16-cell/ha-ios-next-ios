@@ -39,9 +39,7 @@ struct EntityControlView: View {
         switch entity.controlKind {
         case .light:
             Section("Licht") {
-                Button(entity.isOn ? "Ausschalten" : "Einschalten") {
-                    Task { await appModel.toggle(entity) }
-                }
+                Toggle("Eingeschaltet", isOn: toggleBinding(for: entity))
                 if let brightness = entity.brightness {
                     BrightnessControl(value: brightness / 255) { newValue in
                         Task { await appModel.setBrightness(newValue, for: entity) }
@@ -50,9 +48,7 @@ struct EntityControlView: View {
             }
         case .toggle:
             Section("Steuerung") {
-                Button(entity.isOn ? "Ausschalten" : "Einschalten") {
-                    Task { await appModel.toggle(entity) }
-                }
+                Toggle("Eingeschaltet", isOn: toggleBinding(for: entity))
             }
         case .cover:
             Section("Abdeckung") {
@@ -99,6 +95,16 @@ struct EntityControlView: View {
                 LabeledContent("Wert", value: entity.secondaryStateText)
             }
         }
+    }
+
+    private func toggleBinding(for entity: HomeAssistantEntity) -> Binding<Bool> {
+        Binding(
+            get: { entity.isOn },
+            set: { newValue in
+                guard newValue != entity.isOn else { return }
+                Task { await appModel.toggle(entity) }
+            }
+        )
     }
 }
 private struct BrightnessControl: View {
