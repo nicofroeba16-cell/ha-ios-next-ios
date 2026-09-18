@@ -25,9 +25,6 @@ struct SystemView: View {
                 IOS27SectionHeader(title: "Verbindung", subtitle: "Home Assistant")
                 connectionCard
 
-                IOS27SectionHeader(title: "Inventar", subtitle: "Live aus Home Assistant")
-                inventoryStrip
-
                 IOS27SectionHeader(title: "Systemwarnungen", subtitle: "Technischer Zustand und Quittierung")
                 warningCenter
 
@@ -43,7 +40,7 @@ struct SystemView: View {
                     }
                 }
 
-                IOS27SectionHeader(title: "Diagnose", subtitle: "Technische Ebenen")
+                IOS27SectionHeader(title: "Technische Details", subtitle: "Diagnose und Inventar")
                 diagnosticsCard
             }
             .padding(.horizontal, 16)
@@ -133,22 +130,28 @@ struct SystemView: View {
     }
 
     private var diagnosticsCard: some View {
-        VStack(spacing: 0) {
-            diagnosticLink("Alle Entitäten", "list.bullet.rectangle", appModel.entities)
-            Divider().padding(.leading, 48)
-            diagnosticLink("Aktionen & Dienste", "bolt.fill", appModel.serviceLikeEntities)
-            Divider().padding(.leading, 48)
-            diagnosticLink("Entitäten ohne Raum", "questionmark.folder.fill", appModel.unassignedEntities)
-            Divider().padding(.leading, 48)
-            Button(role: .destructive) {
-                isConfirmingForgetConnection = true
-            } label: {
-                Label("Verbindung entfernen", systemImage: "trash")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 14)
+        DisclosureGroup("Diagnose und Inventar") {
+            VStack(spacing: 0) {
+                inventoryStrip
+                    .padding(.vertical, 8)
+                Divider().padding(.leading, 48)
+                diagnosticLink("Alle Entitäten", "list.bullet.rectangle", appModel.entities)
+                Divider().padding(.leading, 48)
+                diagnosticLink("Aktionen & Dienste", "bolt.fill", appModel.serviceLikeEntities)
+                Divider().padding(.leading, 48)
+                diagnosticLink("Entitäten ohne Raum", "questionmark.folder.fill", appModel.unassignedEntities)
+                Divider().padding(.leading, 48)
+                Button(role: .destructive) {
+                    isConfirmingForgetConnection = true
+                } label: {
+                    Label("Verbindung entfernen", systemImage: "trash")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 14)
+                }
             }
         }
-        .padding(.horizontal, 14)
+        .font(.subheadline.weight(.semibold))
+        .padding(14)
         .ios27ContentSurface(radius: 24)
     }
 

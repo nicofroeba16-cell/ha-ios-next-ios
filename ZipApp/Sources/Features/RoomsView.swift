@@ -29,7 +29,7 @@ struct RoomsView: View {
                             } label: {
                                 IOS27StatusCard(
                                     title: area.name,
-                                    value: "\(appModel.devices(inArea: area.id).count) Geräte · \(appModel.entities(inArea: area.id).count) Entitäten",
+                                    value: "\(appModel.devices(inArea: area.id).count) Geräte",
                                     symbol: "door.left.hand.open",
                                     tint: .blue,
                                     detail: "\(appModel.entities(inArea: area.id).filter(\.isOn).count) aktiv"
@@ -41,23 +41,25 @@ struct RoomsView: View {
                 }
 
                 if !appModel.unassignedDevices.isEmpty {
-                    IOS27SectionHeader(title: "Ohne Raum", subtitle: "Noch nicht zugeordnet")
-                    NavigationLink {
-                        DeviceCollectionView(
-                            title: "Geräte ohne Raum",
-                            devices: appModel.unassignedDevices,
-                            appModel: appModel
-                        )
-                    } label: {
-                        IOS27StatusCard(
-                            title: "Geräte ohne Raum",
-                            value: "\(appModel.unassignedDevices.count) Geräte",
-                            symbol: "square.grid.2x2",
-                            tint: .orange
-                        )
+                    IOS27SectionHeader(title: "Technische Details", subtitle: "Nicht zugeordnete Geräte")
+                    DisclosureGroup("Geräte ohne Raum (\(appModel.unassignedDevices.count))") {
+                        NavigationLink {
+                            DeviceCollectionView(
+                                title: "Geräte ohne Raum",
+                                devices: appModel.unassignedDevices,
+                                appModel: appModel
+                            )
+                        } label: {
+                            Label("Geräte anzeigen", systemImage: "square.grid.2x2")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(IOS27PressStyle())
+                    .padding(14)
+                    .ios27ContentSurface(radius: 24)
                 }
+
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
@@ -86,7 +88,7 @@ struct RoomDetailView: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 IOS27StatusCard(
                     title: area.name,
-                    value: "\(appModel.devices(inArea: area.id).count) Geräte · \(roomEntities.count) Entitäten",
+                    value: "\(appModel.devices(inArea: area.id).count) Geräte",
                     symbol: "door.left.hand.open",
                     tint: .blue,
                     detail: "\(roomEntities.filter(\.isOn).count) aktiv"
