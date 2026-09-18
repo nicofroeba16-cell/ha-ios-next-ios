@@ -1,0 +1,38 @@
+name: iOS Simulator App Export
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export:
+    name: Build simulator app
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Ensure XcodeGen
+        run: command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Generate project
+        working-directory: ZipApp
+        run: xcodegen generate
+      - name: Build simulator app
+        working-directory: ZipApp
+        run: |
+          set -euo pipefail
+          DERIVED="$RUNNER_TEMP/iosnext-app-derived"
+          rm -rf "$DERIVED"
+          xcodebuild build -project IOSNext.xcodeproj -scheme IOSNext \
+            -derivedDataPath "$DERIVED" \
+            -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max,OS=27.0' \
+            CODE_SIGNING_ALLOWED=NO
+          APP="$DERIVED/Build/Products/Debug-iphonesimulator/IOSNext.app"
+          test -d "$APP"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$GITHUB_WORKSPACE/IOSNext-Simulator-App.zip"
+          ls -lh "$GITHUB_WORKSPACE/IOSNext-Simulator-App.zip"
+      - name: Upload simulator app
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: IOSNext-Simulator-App
+          path: IOSNext-Simulator-App.zip
+          if-no-files-found: error
+          retention-days: 1
